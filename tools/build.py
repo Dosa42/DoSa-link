@@ -122,10 +122,13 @@ def main():
     inputs = {Path(item['path']).name: item['sha256'] for item in baseline}
     merged = WORK / 'merged.apk'
     cache = WORK / 'merge-inputs.json'
-    if not merged.exists() or not cache.exists() or json.loads(cache.read_text()) != inputs:
+    merge_inputs = {'apks': inputs, 'merger_sha256': digest(ROOT / 'tools/MergeInputs.java')}
+    if not merged.exists() or not cache.exists() or json.loads(cache.read_text()) != merge_inputs:
         merged.unlink(missing_ok=True)
-        run('merge-original-splits', ['java', '-Xmx768m', '-jar', EDITOR, 'm', '-i', BASE / 'artifacts', '-o', merged, '-extractNativeLibs', 'true', '-validate-modules', '-clean-meta'])
-        cache.write_text(json.dumps(inputs, sort_keys=True))
+        (WORK / 'merger').mkdir(exist_ok=True)
+        run('compile-resource-preserving-merger', ['javac', '-classpath', EDITOR, '-d', WORK / 'merger', ROOT / 'tools/MergeInputs.java'])
+        run('merge-original-splits', ['java', '-Xmx768m', '-classpath', str(EDITOR) + os.pathsep + str(WORK / 'merger'), 'MergeInputs', BASE / 'artifacts', merged])
+        cache.write_text(json.dumps(merge_inputs, sort_keys=True))
     manifest()
     run('compile-private-manifest', ['aapt2', 'link', '--manifest', WORK / 'AndroidManifest.xml', '-I', ANDROID, '-o', WORK / 'manifest.apk'])
     sources = sorted((ROOT / 'src').rglob('*.java'))

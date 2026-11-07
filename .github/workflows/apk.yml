@@ -8,6 +8,7 @@ on:
       - 'tools/build.py'
       - 'tools/verify.py'
       - 'tools/ci.py'
+      - 'tools/MergeInputs.java'
       - 'ci-inputs.json'
       - '.github/workflows/apk.yml'
 permissions:
