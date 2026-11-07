@@ -3,7 +3,7 @@
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <application android:name="android.app.Application" android:label="Wireless Workshop" android:icon="@android:drawable/ic_menu_manage" android:theme="@android:style/Theme.Material.NoActionBar" android:debuggable="true" android:extractNativeLibs="true" android:usesCleartextTraffic="true">
+    <application android:name="android.app.Application" android:label="Wireless Workshop" android:icon="@android:drawable/ic_menu_manage" android:theme="@android:style/Theme.Material.NoActionBar" android:debuggable="true" android:largeHeap="true" android:extractNativeLibs="true" android:usesCleartextTraffic="true">
         <activity android:name="com.ayrvokan.wireless.MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
