@@ -74,7 +74,7 @@ def manifest():
     target = ET.parse(ROOT / 'src/AndroidManifest.xml')
     root = target.getroot()
     excluded = {'com.android.vending.BILLING', 'com.google.android.gms.permission.AD_ID', 'com.google.android.c2dm.permission.RECEIVE', 'android.permission.GET_ACCOUNTS'}
-    retained = []
+    retained = [item.get(NS + 'name') for item in root.findall('uses-permission')]
     removed = []
     index = 1
     for permission in source.findall('uses-permission'):
@@ -82,11 +82,13 @@ def manifest():
         if name in excluded or not name.startswith('android.permission.') or name.startswith('android.permission.ACCESS_ADSERVICES'):
             removed.append(name)
             continue
+        if name in retained:
+            continue
         root.insert(index, permission)
         index += 1
         retained.append(name)
     target.write(WORK / 'AndroidManifest.xml', encoding='utf-8', xml_declaration=True)
-    (ROOT / 'evidence/manifest-changes.json').write_text(json.dumps({'package': root.get('package'), 'application': 'android.app.Application', 'activities': ['com.ayrvokan.wireless.MainActivity'], 'original_component_entry_points_registered': 0, 'providers': 0, 'services': 0, 'receivers': 0, 'retained_device_permissions': retained, 'omitted_permissions': removed}, indent=2) + '\n')
+    (ROOT / 'evidence/manifest-changes.json').write_text(json.dumps({'package': root.get('package'), 'application': 'android.app.Application', 'activities': ['com.ayrvokan.wireless.MainActivity', 'com.ayrvokan.wireless.JadxActivity'], 'original_component_entry_points_registered': 0, 'providers': 0, 'services': 1, 'receivers': 0, 'retained_device_permissions': retained, 'omitted_permissions': removed}, indent=2) + '\n')
 
 def signing_key():
     private = ROOT / 'private'
@@ -150,6 +152,9 @@ def main():
         output.writestr('AndroidManifest.xml', binary_manifest)
         output.writestr('classes' + str(highest + 1) + '.dex', (WORK / 'dex/classes.dex').read_bytes())
         output.writestr('assets/workshop/catalog.json', catalog())
+        for asset in sorted((WORK / 'jadx-seed').rglob('*')):
+            if asset.is_file():
+                output.write(asset, 'assets/workshop/jadx/' + str(asset.relative_to(WORK / 'jadx-seed'))) 
     run('align-single-apk', ['zipalign', '-f', '-P', '16', '4', unsigned, WORK / 'aligned.apk'])
     unsigned.unlink()
     key, password = signing_key()
@@ -160,7 +165,7 @@ def main():
     run('verify-apk-alignment', ['zipalign', '-c', '-P', '16', '4', signed])
     final = ROOT / 'dist/wireless-workshop.apk'
     signed.replace(final)
-    receipt = {'package': 'com.ayrvokan.wireless', 'version': '0.1.0', 'artifact': str(final), 'bytes': final.stat().st_size, 'sha256': digest(final), 'baseline_apks': inputs, 'added_dex': 'classes' + str(highest + 1) + '.dex', 'editor': {'version': '1.4.9', 'sha256': EDITOR_SHA}, 'built_at_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
+    receipt = {'package': 'com.ayrvokan.wireless', 'version': '0.2.1', 'artifact': str(final), 'bytes': final.stat().st_size, 'sha256': digest(final), 'baseline_apks': inputs, 'added_dex': 'classes' + str(highest + 1) + '.dex', 'editor': {'version': '1.4.9', 'sha256': EDITOR_SHA}, 'built_at_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
     (ROOT / 'evidence/build.json').write_text(json.dumps(receipt, indent=2) + '\n')
     print(json.dumps({'stage': 'apk-built', 'artifact': str(final), 'bytes': receipt['bytes'], 'sha256': receipt['sha256']}), flush=True)
 

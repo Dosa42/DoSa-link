@@ -7,3 +7,6 @@ evidence/
 SESSION.md
 tools/github.py
 .inputs/
+jadx/.gradle/
+jadx/local.properties
+jadx/*/build/

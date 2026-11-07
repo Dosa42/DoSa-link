@@ -82,8 +82,13 @@ def main():
         components = {name: len(application.findall(name)) for name in ['activity', 'service', 'receiver', 'provider']}
         if manifest.get('package') != 'com.ayrvokan.wireless' or application.get(NS + 'name') != 'android.app.Application':
             raise ValueError('Unexpected private app identity/startup')
-        if components != {'activity': 1, 'service': 0, 'receiver': 0, 'provider': 0} or activities[0].get(NS + 'name') != 'com.ayrvokan.wireless.MainActivity':
+        if components != {'activity': 2, 'service': 1, 'receiver': 0, 'provider': 0} or activities[0].get(NS + 'name') != 'com.ayrvokan.wireless.MainActivity':
             raise ValueError('Unexpected startup components')
+        if {item.get(NS + 'name') for item in activities} != {'com.ayrvokan.wireless.MainActivity', 'com.ayrvokan.wireless.JadxActivity'}:
+            raise ValueError('Unexpected activities')
+        service = application.find('service')
+        if service.get(NS + 'name') != 'com.ayrvokan.wireless.JadxService' or service.get(NS + 'process') != ':jadx' or service.get(NS + 'exported') != 'false':
+            raise ValueError('Unexpected JADX worker')
         if any('requiredSplit' in key or key == 'split' for key in manifest.attrib):
             raise ValueError('Output still requires a split')
         permissions = [item.get(NS + 'name') for item in manifest.findall('uses-permission')]
@@ -96,7 +101,13 @@ def main():
             raise ValueError('Unexpected baseline code counts')
         if catalog['bridgeDeclarations'] != 1101 or len(catalog['libraries']) != 100:
             raise ValueError('Packaged catalog mismatch')
-        report = {'status': 'pass' if not missing_resources else 'resource-payload-review-required', 'original_apks': original_apks, 'byte_identical_original_code': categories, 'code_files_checked': len(expected_members), 'resource_ids_preserved': len(expected_ids), 'resource_ids_changed_or_missing': changed_ids, 'distinct_resource_payloads_checked': len(expected_resources), 'resource_payload_hashes_missing': missing_resources, 'locales': locales, 'private_startup_components': components, 'application': application.get(NS + 'name'), 'package': manifest.get('package'), 'single_apk': True, 'catalog_classes': len(catalog['classes']), 'catalog_bridge_declarations': catalog['bridgeDeclarations'], 'runtime_executed': False}
+        tool = json.loads(archive.read('assets/workshop/jadx/tool.json'))
+        for name, expected in tool['files'].items():
+            if sha(archive.read('assets/workshop/jadx/' + name)) != expected:
+                raise ValueError('Bundled engine input changed: ' + name)
+        if tool['version'] != '1.5.6' or len(tool['pluginProviders']) < 3:
+            raise ValueError('JADX engine/plugin manifest mismatch')
+        report = {'bundled_jadx_version': tool['version'], 'bundled_jadx_engine_sha256': tool['engineSha256'], 'bundled_tool_files_verified': len(tool['files']), 'status': 'pass' if not missing_resources else 'resource-payload-review-required', 'original_apks': original_apks, 'byte_identical_original_code': categories, 'code_files_checked': len(expected_members), 'resource_ids_preserved': len(expected_ids), 'resource_ids_changed_or_missing': changed_ids, 'distinct_resource_payloads_checked': len(expected_resources), 'resource_payload_hashes_missing': missing_resources, 'locales': locales, 'private_startup_components': components, 'application': application.get(NS + 'name'), 'package': manifest.get('package'), 'single_apk': True, 'catalog_classes': len(catalog['classes']), 'catalog_bridge_declarations': catalog['bridgeDeclarations'], 'runtime_executed': False}
         (ROOT / 'evidence/preservation.json').write_text(json.dumps(report, indent=2) + '\n')
         (ROOT / 'evidence/packaged-manifest.xml').write_bytes(AXMLPrinter(archive.read('AndroidManifest.xml')).get_xml())
     if missing_resources:

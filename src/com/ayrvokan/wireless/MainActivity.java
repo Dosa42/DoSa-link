@@ -139,6 +139,7 @@ public final class MainActivity extends Activity {
         tools.addView(text("Local diagnostics", 19, TEXT));
         tools.addView(text("Check the app's storage and keep the result in Activity.", 14, MUTED));
         tools.addView(button("Check local storage", this::storageCheck));
+        tools.addView(button("Open JADX headless", () -> startActivity(new android.content.Intent(this, JadxActivity.class))));
         body.addView(text("Device connections are not configured yet.", 13, MUTED));
     }
 
@@ -220,7 +221,7 @@ public final class MainActivity extends Activity {
             Toast.makeText(this, "Workspace saved", Toast.LENGTH_SHORT).show();
         }));
         LinearLayout about = card(body);
-        about.addView(text("Wireless Workshop 0.1.0", 18, TEXT));
+        about.addView(text("Wireless Workshop 0.2.1", 18, TEXT));
         about.addView(text("Personal APK · ARM64\nOriginal device code: eWeLink 5.30.0", 14, MUTED));
         about.addView(button("Clear activity history", () -> {
             store.clearEvents();

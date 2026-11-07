@@ -10,10 +10,11 @@ import org.json.JSONObject;
 
 public final class WorkshopStore extends SQLiteOpenHelper {
     public WorkshopStore(Context context) {
-        super(context, "workshop.db", null, 1);
+        super(context, "workshop.db", null, 2);
     }
 
     @Override public void onCreate(SQLiteDatabase db) {
+        createJobs(db);
         db.execSQL("CREATE TABLE settings (name TEXT PRIMARY KEY, value TEXT NOT NULL)");
         db.execSQL("CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, recorded_at INTEGER NOT NULL, kind TEXT NOT NULL, message TEXT NOT NULL)");
         db.execSQL("CREATE TABLE profiles (id TEXT PRIMARY KEY, label TEXT NOT NULL, kind TEXT NOT NULL, status TEXT NOT NULL)");
@@ -23,7 +24,37 @@ public final class WorkshopStore extends SQLiteOpenHelper {
     }
 
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        throw new IllegalStateException("Unsupported database upgrade");
+        if (oldVersion < 2) createJobs(db);
+    }
+
+    private void createJobs(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, label TEXT NOT NULL, state TEXT NOT NULL, detail TEXT NOT NULL, updated_at INTEGER NOT NULL)");
+    }
+
+    public void job(String id, String label, String state, String detail) {
+        ContentValues value = new ContentValues();
+        value.put("id", id);
+        value.put("label", label);
+        value.put("state", state);
+        value.put("detail", detail);
+        value.put("updated_at", System.currentTimeMillis());
+        getWritableDatabase().insertWithOnConflict("jobs", null, value, SQLiteDatabase.CONFLICT_REPLACE);
+    }
+
+    public JSONArray jobs() throws Exception {
+        JSONArray result = new JSONArray();
+        try (Cursor cursor = getReadableDatabase().rawQuery("SELECT id,label,state,detail,updated_at FROM jobs ORDER BY updated_at DESC", null)) {
+            while (cursor.moveToNext()) {
+                JSONObject item = new JSONObject();
+                item.put("id", cursor.getString(0));
+                item.put("label", cursor.getString(1));
+                item.put("state", cursor.getString(2));
+                item.put("detail", cursor.getString(3));
+                item.put("updated", cursor.getLong(4));
+                result.put(item);
+            }
+        }
+        return result;
     }
 
     public String workspace() {
