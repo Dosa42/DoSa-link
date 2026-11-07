@@ -266,7 +266,8 @@ public final class JadxActivity extends Activity {
                 String value = JadxJobs.read(file);
                 runOnUiThread(() -> {
                     if (isFinishing() || isDestroyed()) return;
-                    TextView text = text(value, 13, Color.BLACK);
+                    TextView text = text(value, 13, TEXT);
+                    text.setBackgroundColor(BG);
                     text.setTypeface(Typeface.MONOSPACE);
                     text.setTextIsSelectable(true);
                     text.setPadding(20, 20, 20, 20);
