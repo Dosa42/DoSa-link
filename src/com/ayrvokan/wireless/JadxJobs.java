@@ -90,6 +90,7 @@ public final class JadxJobs {
                 if (alive(context, pid)) continue;
                 remove(new File(dir, "working"));
                 remove(new File(dir, "input"));
+                remove(new File(context.getCodeCacheDir(), "jadx/engine.part"));
                 for (String name : new String[] {"progress.json.part", "request.json.part", "worker.json.part"}) remove(new File(dir, name));
                 boolean finalized = new File(dir, "result/engine-report.json").isFile();
                 String resolved = finalized ? new JSONObject(read(new File(dir, "result/engine-report.json"))).getString("status") : state.equals("stopping") ? "stopped" : "interrupted";
@@ -150,6 +151,7 @@ public final class JadxJobs {
             while (alive(context, pid)) Thread.sleep(50);
             remove(new File(dir, "working"));
             remove(new File(dir, "input"));
+            remove(new File(context.getCodeCacheDir(), "jadx/engine.part"));
             for (String name : new String[] {"progress.json.part", "request.json.part", "worker.json.part"}) remove(new File(dir, name));
             File report = new File(dir, "result/engine-report.json");
             String state = report.isFile() ? new JSONObject(read(report)).getString("status") : "stopped";

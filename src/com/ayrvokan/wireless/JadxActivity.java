@@ -129,6 +129,7 @@ public final class JadxActivity extends Activity {
             try {
                 JadxJobs.recover(getApplicationContext());
                 File pending = new File(getFilesDir(), "jadx-export.json");
+                if (!exportInProgress) JadxJobs.remove(new File(pending.getPath() + ".part"));
                 if (pending.isFile() && !exportInProgress) {
                     JSONObject interrupted = new JSONObject(JadxJobs.read(pending));
                     if (!interrupted.optString("state").equals("completed")) DocumentsContract.deleteDocument(getContentResolver(), Uri.parse(interrupted.getString("uri")));
@@ -324,6 +325,7 @@ public final class JadxActivity extends Activity {
                     } catch (Exception cleanup) { message("Export failed; incomplete document cleanup needs retry: " + cleanup); }
                     message("Export failed: " + error);
                 } finally {
+                    try { JadxJobs.remove(new File(pending.getPath() + ".part")); } catch (Exception error) { message("Export metadata cleanup needs retry: " + error); }
                     exportInProgress = false;
                 }
             }, "jadx-export").start();
