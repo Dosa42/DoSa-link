@@ -29,7 +29,14 @@ def main():
     run('build-bundled-jadx-and-fixtures', ['gradle', '-p', ROOT / 'jadx', ':engine:assembleRelease', ':fixture:assembleRelease', ':engine:recordDependencies', '--no-daemon', '--console=plain'])
     engine = ROOT / 'jadx/engine/build/outputs/apk/release/engine-release-unsigned.apk'
     fixture = ROOT / 'jadx/fixture/build/outputs/apk/release/fixture-release-unsigned.apk'
-    shutil.copyfile(engine, seed / 'engine.apk')
+    upstream_manifest = (ROOT / 'evidence/jadx-upstream-manifest.mf').read_bytes()
+    if b'jadx-version: 1.5.6' not in upstream_manifest:
+        raise ValueError('Upstream engine version metadata differs from the pinned release')
+    with zipfile.ZipFile(engine) as original, zipfile.ZipFile(seed / 'engine.apk', 'w') as output:
+        for item in original.infolist():
+            if item.filename != 'META-INF/MANIFEST.MF':
+                output.writestr(item, original.read(item))
+        output.writestr('META-INF/MANIFEST.MF', upstream_manifest)
     samples = seed / 'fixtures'
     samples.mkdir()
     shutil.copyfile(fixture, samples / 'fixture.apk')
@@ -41,7 +48,7 @@ def main():
     shutil.copyfile(classes[0], samples / 'SeedProbe.class')
     (samples / 'SeedProbe.smali').write_text('.class public final Lcom/ayrvokan/fixture/SeedProbe;\n.super Ljava/lang/Object;\n\n.method public static answer()I\n    .locals 1\n    const/16 v0, 0x2a\n    return v0\n.end method\n')
     shutil.copyfile(ROOT / 'evidence/jadx-dependencies.json', seed / 'dependencies.json')
-    with zipfile.ZipFile(engine) as archive:
+    with zipfile.ZipFile(seed / 'engine.apk') as archive:
         plugins = [name for name in archive.namelist() if name.startswith('META-INF/services/')]
         class_sets = [name for name in archive.namelist() if name.endswith('.jcst')]
         if not any(name.endswith('jadx.api.plugins.JadxPlugin') for name in plugins) or not class_sets:

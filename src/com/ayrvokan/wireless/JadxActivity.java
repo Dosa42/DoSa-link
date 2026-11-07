@@ -90,6 +90,22 @@ public final class JadxActivity extends Activity {
             label = "wireless-workshop.apk";
             selected.setText(label);
         }));
+        root.addView(button("Choose DEX from this APK", () -> {
+            try (java.util.zip.ZipFile archive = new java.util.zip.ZipFile(getApplicationInfo().sourceDir)) {
+                java.util.List<String> names = new java.util.ArrayList<>();
+                java.util.Enumeration<? extends java.util.zip.ZipEntry> entries = archive.entries();
+                while (entries.hasMoreElements()) {
+                    String name = entries.nextElement().getName();
+                    if (name.matches("classes[0-9]*\\.dex")) names.add(name);
+                }
+                java.util.Collections.sort(names);
+                new AlertDialog.Builder(this).setTitle("Choose a DEX member").setItems(names.toArray(new String[0]), (dialog, index) -> {
+                    source = "apk-dex:" + names.get(index);
+                    label = names.get(index);
+                    selected.setText("This APK / " + label);
+                }).setNegativeButton("Close", null).show();
+            } catch (Exception error) { message(error.toString()); }
+        }));
         root.addView(text("Class filter (optional; empty exports all classes)", 15, TEXT));
         className = edit("com.example.ClassName");
         root.addView(className);
@@ -121,10 +137,19 @@ public final class JadxActivity extends Activity {
             }
             catch (Exception error) { message(error.toString()); }
             runOnUiThread(() -> {
+                if (saved == null && getIntent().hasExtra("stopJob")) {
+                    String id = getIntent().getStringExtra("stopJob");
+                    new Thread(() -> {
+                        try { JadxJobs.stop(getApplicationContext(), id); }
+                        catch (Exception error) { message(error.toString()); }
+                    }, "jadx-explicit-stop").start();
+                    return;
+                }
                 if (saved == null && (getIntent().hasExtra("fixture") || getIntent().hasExtra("input"))) {
                     if (getIntent().hasExtra("fixture")) fixture(getIntent().getStringExtra("fixture"));
-                    else { source = getIntent().getStringExtra("input"); label = new File(source).getName(); selected.setText(label); }
+                    else { source = getIntent().getStringExtra("input"); label = source.startsWith("apk-dex:") ? source.substring(8) : new File(source).getName(); selected.setText(label); }
                     className.setText(getIntent().getStringExtra("selectedClass"));
+                    advanced.setText(getIntent().getStringExtra("options"));
                     if (getIntent().getBooleanExtra("run", false)) runJob();
                 }
             });
@@ -239,6 +264,7 @@ public final class JadxActivity extends Activity {
             try {
                 String value = JadxJobs.read(file);
                 runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
                     TextView text = text(value, 13, Color.BLACK);
                     text.setTypeface(Typeface.MONOSPACE);
                     text.setTextIsSelectable(true);

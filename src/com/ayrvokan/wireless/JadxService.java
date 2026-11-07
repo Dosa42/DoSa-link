@@ -99,7 +99,13 @@ public final class JadxService extends Service {
                 store.job(id, label, "running", "Preparing bundled engine");
                 File input;
                 String source = request.getString("source");
-                if (source.startsWith("asset:")) {
+                if (source.startsWith("apk-dex:")) {
+                    String member = source.substring(8);
+                    File folder = new File(dir, "input");
+                    folder.mkdirs();
+                    input = new File(folder, member);
+                    try (java.util.zip.ZipFile archive = new java.util.zip.ZipFile(getApplicationInfo().sourceDir); InputStream from = archive.getInputStream(archive.getEntry(member)); FileOutputStream to = new FileOutputStream(input)) { JadxJobs.copy(from, to); }
+                } else if (source.startsWith("asset:")) {
                     File folder = new File(dir, "input");
                     folder.mkdirs();
                     input = new File(folder, source.substring(source.lastIndexOf('/') + 1));
@@ -121,7 +127,13 @@ public final class JadxService extends Service {
                 JSONObject report = new JSONObject(reportText);
                 report.put("inputSha256", request.getString("inputSha256"));
                 report.put("bundledEngineSha256", JadxJobs.hash(code));
-                if (source.startsWith("asset:")) {
+                if (source.startsWith("apk-dex:")) {
+                    String member = source.substring(8);
+                    File folder = new File(dir, "input");
+                    folder.mkdirs();
+                    input = new File(folder, member);
+                    try (java.util.zip.ZipFile archive = new java.util.zip.ZipFile(getApplicationInfo().sourceDir); InputStream from = archive.getInputStream(archive.getEntry(member)); FileOutputStream to = new FileOutputStream(input)) { JadxJobs.copy(from, to); }
+                } else if (source.startsWith("asset:")) {
                     File seed = new File(working, "sources/com/ayrvokan/fixture/SeedProbe.java");
                     boolean passed = seed.isFile() && JadxJobs.read(seed).contains("42") && JadxJobs.read(seed).contains("answer");
                     if (label.equals("fixture.apk")) {

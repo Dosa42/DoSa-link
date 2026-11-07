@@ -52,5 +52,9 @@ tasks.register('recordDependencies') {
         def target = new File(rootProject.projectDir.parentFile, 'evidence/jadx-dependencies.json')
         target.parentFile.mkdirs()
         target.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(entries)) + '\n'
+        def core = configurations.releaseRuntimeClasspath.resolvedConfiguration.resolvedArtifacts.find { it.moduleVersion.id.group == 'io.github.skylot' && it.moduleVersion.id.name == 'jadx-core' }
+        new java.util.jar.JarFile(core.file).withCloseable { jar ->
+            new File(target.parentFile, 'jadx-upstream-manifest.mf').bytes = jar.getInputStream(jar.getJarEntry('META-INF/MANIFEST.MF')).bytes
+        }
     }
 }
