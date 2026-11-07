@@ -90,6 +90,7 @@ public final class JadxJobs {
                 if (alive(context, pid)) continue;
                 remove(new File(dir, "working"));
                 remove(new File(dir, "input"));
+                for (String name : new String[] {"progress.json.part", "request.json.part", "worker.json.part"}) remove(new File(dir, name));
                 boolean finalized = new File(dir, "result/engine-report.json").isFile();
                 String resolved = finalized ? new JSONObject(read(new File(dir, "result/engine-report.json"))).getString("status") : state.equals("stopping") ? "stopped" : "interrupted";
                 store.job(job.getString("id"), job.getString("label"), resolved, finalized ? "Finished output recovered" : "Unfinished working files cleaned");
@@ -100,18 +101,31 @@ public final class JadxJobs {
 
     public static String start(Context context, String source, String label, String selectedClass, JSONArray options) throws Exception {
         try (WorkshopStore store = new WorkshopStore(context)) {
-            JSONArray jobs = store.jobs();
-            for (int i = 0; i < jobs.length(); i++) {
-                String state = jobs.getJSONObject(i).getString("state");
-                if (state.equals("queued") || state.equals("running") || state.equals("stopping")) throw new IllegalStateException("A JADX job is already active");
-            }
             String id = System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 8);
             File dir = directory(context, id);
-            dir.mkdirs();
-            JSONObject request = new JSONObject().put("id", id).put("label", label).put("source", source).put("selectedClass", selectedClass).put("options", options);
-            write(new File(dir, "request.json"), request);
-            store.job(id, label, "queued", "Starting bundled JADX worker");
-            store.event("jadx", id + ": queued " + label);
+            android.database.sqlite.SQLiteDatabase database = store.getWritableDatabase();
+            database.beginTransaction();
+            try {
+                JSONArray jobs = store.jobs();
+                for (int i = 0; i < jobs.length(); i++) {
+                    JSONObject job = jobs.getJSONObject(i);
+                    String state = job.getString("state");
+                    if (state.equals("queued") || state.equals("running") || state.equals("stopping")) throw new IllegalStateException("A JADX job is already active");
+                    File runtime = new File(directory(context, job.getString("id")), "worker.json");
+                    if (runtime.isFile() && alive(context, new JSONObject(read(runtime)).optInt("pid", -1))) throw new IllegalStateException("The previous worker is finishing; retry Run shortly");
+                }
+                dir.mkdirs();
+                JSONObject request = new JSONObject().put("id", id).put("label", label).put("source", source).put("selectedClass", selectedClass).put("options", options);
+                write(new File(dir, "request.json"), request);
+                store.job(id, label, "queued", "Starting bundled JADX worker");
+                store.event("jadx", id + ": queued " + label);
+                database.setTransactionSuccessful();
+            } catch (Exception error) {
+                remove(dir);
+                throw error;
+            } finally {
+                database.endTransaction();
+            }
             try {
                 Intent intent = new Intent(context, JadxService.class).putExtra("id", id);
                 if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent);
@@ -136,8 +150,11 @@ public final class JadxJobs {
             while (alive(context, pid)) Thread.sleep(50);
             remove(new File(dir, "working"));
             remove(new File(dir, "input"));
-            store.job(id, request.getString("label"), "stopped", "Unfinished working files cleaned after explicit Stop");
-            store.event("jadx", id + ": stopped by user; unfinished files cleaned");
+            for (String name : new String[] {"progress.json.part", "request.json.part", "worker.json.part"}) remove(new File(dir, name));
+            File report = new File(dir, "result/engine-report.json");
+            String state = report.isFile() ? new JSONObject(read(report)).getString("status") : "stopped";
+            store.job(id, request.getString("label"), state, report.isFile() ? "Job finished before Stop" : "Unfinished working files cleaned after explicit Stop");
+            store.event("jadx", id + ": " + state + "; explicit Stop handled and unfinished files cleaned");
         }
     }
 

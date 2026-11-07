@@ -25,7 +25,7 @@ public final class JadxService extends Service {
 
         @Override protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
             if (name.startsWith("java.") || name.startsWith("javax.") || name.startsWith("android.") || name.startsWith("dalvik.") || name.startsWith("org.json.") || name.startsWith("org.xml.") || name.startsWith("org.w3c.")) return super.loadClass(name, resolve);
-            synchronized (getClassLoadingLock(name)) {
+            synchronized (this) {
                 Class<?> loaded = findLoadedClass(name);
                 if (loaded == null) {
                     try { loaded = findClass(name); }

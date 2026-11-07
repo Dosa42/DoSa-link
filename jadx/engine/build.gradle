@@ -40,6 +40,7 @@ dependencies {
     implementation 'io.github.skylot:jadx-smali-input:1.5.6'
     implementation 'io.github.skylot:jadx-kotlin-metadata:1.5.6'
     implementation 'com.github.tony19:logback-android:3.0.0'
+    implementation 'org.slf4j:slf4j-api:2.0.17'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
 }
 tasks.register('recordDependencies') {

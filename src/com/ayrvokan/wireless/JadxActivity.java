@@ -43,6 +43,7 @@ public final class JadxActivity extends Activity {
     private String label = "fixture.apk";
     private String exporting;
     private boolean active;
+    private static volatile boolean exportInProgress;
     private String lastHistory = "";
     private final Runnable refresh = new Runnable() {
         @Override public void run() {
@@ -109,11 +110,20 @@ public final class JadxActivity extends Activity {
             selected.setText(label);
         }
         new Thread(() -> {
-            try { JadxJobs.recover(getApplicationContext()); }
+            try {
+                JadxJobs.recover(getApplicationContext());
+                File pending = new File(getFilesDir(), "jadx-export.json");
+                if (pending.isFile() && !exportInProgress) {
+                    JSONObject interrupted = new JSONObject(JadxJobs.read(pending));
+                    if (!interrupted.optString("state").equals("completed")) DocumentsContract.deleteDocument(getContentResolver(), Uri.parse(interrupted.getString("uri")));
+                    JadxJobs.remove(pending);
+                }
+            }
             catch (Exception error) { message(error.toString()); }
             runOnUiThread(() -> {
-                if (saved == null && getIntent().hasExtra("fixture")) {
-                    fixture(getIntent().getStringExtra("fixture"));
+                if (saved == null && (getIntent().hasExtra("fixture") || getIntent().hasExtra("input"))) {
+                    if (getIntent().hasExtra("fixture")) fixture(getIntent().getStringExtra("fixture"));
+                    else { source = getIntent().getStringExtra("input"); label = new File(source).getName(); selected.setText(label); }
                     className.setText(getIntent().getStringExtra("selectedClass"));
                     if (getIntent().getBooleanExtra("run", false)) runJob();
                 }
@@ -189,6 +199,7 @@ public final class JadxActivity extends Activity {
                     card.addView(button("Browse completed output", () -> browse(result, result)));
                     card.addView(button("View engine report", () -> viewFile(new File(result, "engine-report.json"))));
                     card.addView(button("Export completed output ZIP", () -> {
+                        if (exportInProgress) { message("An export is already running"); return; }
                         exporting = id;
                         Intent save = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/zip").putExtra(Intent.EXTRA_TITLE, "jadx-" + id + ".zip");
                         startActivityForResult(save, 32);
@@ -266,15 +277,28 @@ public final class JadxActivity extends Activity {
         } else if (request == 32 && exporting != null) {
             String id = exporting;
             exporting = null;
+            exportInProgress = true;
             new Thread(() -> {
-                try (OutputStream stream = getContentResolver().openOutputStream(uri, "w"); ZipOutputStream output = new ZipOutputStream(stream)) {
-                    File complete = new File(JadxJobs.directory(this, id), "result");
-                    zip(complete, complete, output);
+                File pending = new File(getFilesDir(), "jadx-export.json");
+                try {
+                    JSONObject record = new JSONObject().put("id", id).put("uri", uri.toString()).put("state", "writing");
+                    JadxJobs.write(pending, record);
+                    try (OutputStream stream = getContentResolver().openOutputStream(uri, "w"); ZipOutputStream output = new ZipOutputStream(stream)) {
+                        File complete = new File(JadxJobs.directory(this, id), "result");
+                        zip(complete, complete, output);
+                    }
+                    record.put("state", "completed");
+                    JadxJobs.write(pending, record);
+                    JadxJobs.remove(pending);
                     message("Completed output exported");
                 } catch (Exception error) {
-                    try { DocumentsContract.deleteDocument(getContentResolver(), uri); }
-                    catch (Exception cleanup) { message("Export failed; unable to remove incomplete document: " + cleanup); }
+                    try {
+                        DocumentsContract.deleteDocument(getContentResolver(), uri);
+                        JadxJobs.remove(pending);
+                    } catch (Exception cleanup) { message("Export failed; incomplete document cleanup needs retry: " + cleanup); }
                     message("Export failed: " + error);
+                } finally {
+                    exportInProgress = false;
                 }
             }, "jadx-export").start();
         }

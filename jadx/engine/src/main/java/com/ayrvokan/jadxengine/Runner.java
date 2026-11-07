@@ -31,7 +31,7 @@ public final class Runner {
 
     public static String run(String requestPath, String outputPath, String progressPath) throws Exception {
         long started = System.currentTimeMillis();
-        JSONObject request = new JSONObject(Files.readString(new File(requestPath).toPath()));
+        JSONObject request = new JSONObject(new String(Files.readAllBytes(new File(requestPath).toPath()), java.nio.charset.StandardCharsets.UTF_8));
         File output = new File(outputPath);
         output.mkdirs();
         java.io.PrintStream previousOut = System.out;
