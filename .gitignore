@@ -1,0 +1,9 @@
+.build/
+.transfer/
+dist/
+private/
+toolchain/
+evidence/
+SESSION.md
+tools/github.py
+.inputs/
