@@ -44,7 +44,7 @@ def main():
             raise ValueError('Original APK changed: ' + path.name)
         original_apks.append({'file': path.name, 'sha256': actual, 'unchanged': True})
         with zipfile.ZipFile(path) as archive:
-            ids, locales = resource_ids(archive.read('resources.arsc'))
+            ids, locales = resource_ids(archive.read('resources.arsc')) if 'resources.arsc' in archive.namelist() else ({}, [])
             for identity, name in ids.items():
                 if identity in expected_ids and expected_ids[identity] != name:
                     raise ValueError('Conflicting original resource ID: ' + identity)
