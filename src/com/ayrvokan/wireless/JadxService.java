@@ -73,6 +73,7 @@ public final class JadxService extends Service {
         File target = new File(cache, seed.getString("engineSha256") + ".apk");
         if (!target.exists()) {
             File part = new File(cache, "engine.part");
+            JadxJobs.remove(part);
             try (FileOutputStream output = new FileOutputStream(part); InputStream input = getAssets().open("workshop/jadx/engine.apk")) {
                 if (!part.setReadOnly()) throw new java.io.IOException("Unable to prepare engine code file");
                 JadxJobs.copy(input, output);
@@ -119,9 +120,16 @@ public final class JadxService extends Service {
                 String reportText = (String) entry.getMethod("run", String.class, String.class, String.class).invoke(null, new File(dir, "request.json").getPath(), working.getPath(), new File(dir, "progress.json").getPath());
                 JSONObject report = new JSONObject(reportText);
                 report.put("inputSha256", request.getString("inputSha256"));
+                report.put("bundledEngineSha256", JadxJobs.hash(code));
                 if (source.startsWith("asset:")) {
                     File seed = new File(working, "sources/com/ayrvokan/fixture/SeedProbe.java");
                     boolean passed = seed.isFile() && JadxJobs.read(seed).contains("42") && JadxJobs.read(seed).contains("answer");
+                    if (label.equals("fixture.apk")) {
+                        File manifest = new File(working, "resources/AndroidManifest.xml");
+                        File strings = new File(working, "resources/res/values/strings.xml");
+                        passed = passed && manifest.isFile() && strings.isFile() && JadxJobs.read(strings).contains("Embedded engine verified");
+                        report.put("fixtureResourcesVerified", passed);
+                    }
                     report.put("fixtureVerified", passed);
                     if (!passed) throw new IllegalStateException("Fixture did not produce the expected SeedProbe.answer output");
                 }
@@ -135,7 +143,12 @@ public final class JadxService extends Service {
             } catch (Throwable error) {
                 Throwable cause = error instanceof java.lang.reflect.InvocationTargetException ? error.getCause() : error;
                 String detail = cause.toString();
-                if (new File(working, "jadx.log").isFile()) java.nio.file.Files.copy(new File(working, "jadx.log").toPath(), new File(dir, "jadx.log").toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                for (String log : new String[] {"jadx.log", "console.log"}) {
+                    if (new File(working, log).isFile()) {
+                        try { java.nio.file.Files.copy(new File(working, log).toPath(), new File(dir, log).toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING); }
+                        catch (Exception copyError) { detail += "\nLog retention failed: " + copyError; }
+                    }
+                }
                 JadxJobs.remove(working);
                 JadxJobs.remove(new File(dir, "input"));
                 JadxJobs.write(new File(dir, "failure.json"), new JSONObject().put("error", detail).put("stack", android.util.Log.getStackTraceString(cause)));
@@ -145,6 +158,10 @@ public final class JadxService extends Service {
         } catch (Exception failure) {
             android.util.Log.e("WorkshopJadx", "Job finalization failed", failure);
         } finally {
+            for (String name : new String[] {"progress.json.part", "request.json.part", "worker.json.part"}) {
+                try { JadxJobs.remove(new File(dir, name)); } catch (Exception error) { android.util.Log.e("WorkshopJadx", "Metadata cleanup failed", error); }
+            }
+            try { JadxJobs.remove(new File(getCodeCacheDir(), "jadx/engine.part")); } catch (Exception error) { android.util.Log.e("WorkshopJadx", "Engine cleanup failed", error); }
             stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
             android.os.Process.killProcess(android.os.Process.myPid());

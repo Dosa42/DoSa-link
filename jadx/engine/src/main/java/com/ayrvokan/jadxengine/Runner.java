@@ -34,6 +34,11 @@ public final class Runner {
         JSONObject request = new JSONObject(Files.readString(new File(requestPath).toPath()));
         File output = new File(outputPath);
         output.mkdirs();
+        java.io.PrintStream previousOut = System.out;
+        java.io.PrintStream previousErr = System.err;
+        java.io.PrintStream console = new java.io.PrintStream(new java.io.FileOutputStream(new File(output, "console.log")), true, "UTF-8");
+        System.setOut(console);
+        System.setErr(console);
         LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
         PatternLayoutEncoder encoder = new PatternLayoutEncoder();
         encoder.setContext(context);
@@ -59,6 +64,7 @@ public final class Runner {
             options.add(request.getString("input"));
             JadxCLIArgs cli = new JadxCLIArgs();
             if (!cli.processArgs(options.toArray(new String[0]))) throw new IllegalArgumentException("JADX did not accept these options");
+            if (options.stream().noneMatch(value -> value.equals("--log-level") || value.equals("--quiet") || value.equals("-q") || value.equals("--verbose") || value.equals("-v"))) logger.setLevel(Level.INFO);
             JadxArgs args = cli.toJadxArgs();
             args.setOutDir(output);
             if (!selected.isEmpty()) args.setClassFilter(name -> name.equals(selected) || name.startsWith(selected + "$"));
@@ -113,6 +119,9 @@ public final class Runner {
             logger.detachAppender(appender);
             appender.stop();
             encoder.stop();
+            console.close();
+            System.setOut(previousOut);
+            System.setErr(previousErr);
         }
     }
 }

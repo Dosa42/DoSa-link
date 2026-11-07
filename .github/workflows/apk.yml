@@ -42,7 +42,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: jadx-cache
         with:
           path: .build/jadx-seed
           key: jadx-engine-${{ runner.os }}-${{ hashFiles('jadx/**', 'tools/build_jadx.py') }}
@@ -52,6 +53,11 @@ jobs:
         run: python tools/ci.py prepare
       - name: Build self-contained JADX engine
         run: python tools/build_jadx.py
+      - uses: actions/cache/save@v4
+        if: steps.jadx-cache.outputs.cache-hit != 'true'
+        with:
+          path: .build/jadx-seed
+          key: ${{ steps.jadx-cache.outputs.cache-primary-key }}
       - name: Build and sign APK
         run: python tools/build.py
       - name: Verify preserved code and resources

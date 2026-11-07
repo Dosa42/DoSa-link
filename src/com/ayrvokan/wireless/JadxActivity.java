@@ -201,6 +201,12 @@ public final class JadxActivity extends Activity {
                     File selectedLog = log;
                     card.addView(button("View JADX log", () -> viewFile(selectedLog)));
                 }
+                File console = new File(result, "console.log");
+                if (!console.exists()) console = new File(dir, "console.log");
+                if (console.exists()) {
+                    File selectedConsole = console;
+                    card.addView(button("View CLI output", () -> viewFile(selectedConsole)));
+                }
                 if (new File(dir, "failure.json").isFile()) card.addView(button("View failure", () -> viewFile(new File(dir, "failure.json"))));
             }
         } catch (Exception error) { message(error.toString()); }

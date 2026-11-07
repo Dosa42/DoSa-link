@@ -9,6 +9,7 @@ from build import ROOT, WORK, digest, run
 def main():
     if os.environ.get('GITHUB_ACTIONS') != 'true':
         raise RuntimeError('Engine compilation runs only in GitHub Actions')
+    (ROOT / 'evidence').mkdir(exist_ok=True)
     WORK.mkdir(exist_ok=True)
     seed = WORK / 'jadx-seed'
     inputs = {str(path.relative_to(ROOT)): digest(path) for path in sorted((ROOT / 'jadx').rglob('*')) if path.is_file() and 'build' not in path.relative_to(ROOT / 'jadx').parts and '.gradle' not in path.parts}
