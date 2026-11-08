@@ -82,7 +82,7 @@ def main():
         components = {name: len(application.findall(name)) for name in ['activity', 'service', 'receiver', 'provider']}
         if manifest.get('package') != 'com.ayrvokan.wireless' or application.get(NS + 'name') != 'com.ayrvokan.wireless.WorkshopApplication':
             raise ValueError('Unexpected private app identity/startup')
-        if components != {'activity': 6, 'service': 4, 'receiver': 0, 'provider': 0} or activities[0].get(NS + 'name') != 'com.ayrvokan.wireless.MainActivity':
+        if components != {'activity': 6, 'service': 5, 'receiver': 0, 'provider': 0} or activities[0].get(NS + 'name') != 'com.ayrvokan.wireless.MainActivity':
             raise ValueError('Unexpected startup components')
         if {item.get(NS + 'name') for item in activities} != {'com.ayrvokan.wireless.MainActivity', 'com.ayrvokan.wireless.JadxActivity', 'com.ayrvokan.wireless.DiagnosticsActivity', 'com.ayrvokan.wireless.TerminalActivity', 'com.ayrvokan.wireless.FilesActivity', 'com.ayrvokan.wireless.DebugActivity'}:
             raise ValueError('Unexpected activities')
@@ -127,7 +127,7 @@ def main():
                 raise ValueError('Bundled debugger mismatch: ' + name)
             if name.endswith('.so') and (data[:4] != b'\x7fELF' or int.from_bytes(data[18:20], 'little') != 183):
                 raise ValueError('Debugger native component is not ARM64 ELF: ' + name)
-        for component, process in [('DebugService', ':debugger'), ('DebugProbeService', ':debugprobe')]:
+        for component, process in [('DebugService', ':debugger'), ('DebugProbeService', ':debugprobe'), ('NativeGuardianService', ':debugguardian')]:
             worker = next(item for item in application.findall('service') if item.get(NS + 'name') == 'com.ayrvokan.wireless.' + component)
             if worker.get(NS + 'process') != process or worker.get(NS + 'exported') != 'false' or int(worker.get(NS + 'foregroundServiceType', '0'), 0) != 0x40000000 or worker.find('property') is None:
                 raise ValueError('Unexpected debugger component: ' + component)

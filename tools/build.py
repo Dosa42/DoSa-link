@@ -88,7 +88,7 @@ def manifest():
         index += 1
         retained.append(name)
     target.write(WORK / 'AndroidManifest.xml', encoding='utf-8', xml_declaration=True)
-    (ROOT / 'evidence/manifest-changes.json').write_text(json.dumps({'package': root.get('package'), 'application': 'com.ayrvokan.wireless.WorkshopApplication', 'activities': ['com.ayrvokan.wireless.MainActivity', 'com.ayrvokan.wireless.JadxActivity', 'com.ayrvokan.wireless.DiagnosticsActivity', 'com.ayrvokan.wireless.TerminalActivity', 'com.ayrvokan.wireless.FilesActivity', 'com.ayrvokan.wireless.DebugActivity'], 'original_component_entry_points_registered': 0, 'providers': 0, 'services': 4, 'receivers': 0, 'retained_device_permissions': retained, 'omitted_permissions': removed}, indent=2) + '\n')
+    (ROOT / 'evidence/manifest-changes.json').write_text(json.dumps({'package': root.get('package'), 'application': 'com.ayrvokan.wireless.WorkshopApplication', 'activities': ['com.ayrvokan.wireless.MainActivity', 'com.ayrvokan.wireless.JadxActivity', 'com.ayrvokan.wireless.DiagnosticsActivity', 'com.ayrvokan.wireless.TerminalActivity', 'com.ayrvokan.wireless.FilesActivity', 'com.ayrvokan.wireless.DebugActivity'], 'original_component_entry_points_registered': 0, 'providers': 0, 'services': 5, 'receivers': 0, 'retained_device_permissions': retained, 'omitted_permissions': removed}, indent=2) + '\n')
 
 def signing_key():
     private = ROOT / 'private'

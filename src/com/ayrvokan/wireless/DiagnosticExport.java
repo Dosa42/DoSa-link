@@ -58,7 +58,7 @@ public final class DiagnosticExport {
             }
             for (String id : debuggers) {
                 File directory = DebugJobs.directory(context, id);
-                for (String name : new String[] {"request.json", "worker.json", "state.json", "agent-events.jsonl", "controller-events.jsonl", "server.json", "server-process.json", "guardian-events.jsonl", "guardian-report.json", "server-stdout.log", "server-stderr.log", "rsp.jsonl", "probe-result.json", "report.json", "failure.json", "endpoint-error.json"}) {
+                for (String name : new String[] {"request.json", "worker.json", "state.json", "agent-events.jsonl", "controller-events.jsonl", "server.json", "server-process.json", "guardian-events.jsonl", "guardian-report.json", "guardian-worker.json", "guardian-worker-report.json", "guardian-failure.json", "server-stdout.log", "server-stderr.log", "rsp.jsonl", "probe-result.json", "report.json", "failure.json", "endpoint-error.json"}) {
                     File file = new File(directory, name); if (file.isFile()) attach(zip, files, file, "jobs/debug/" + id + "/" + name);
                 }
             }

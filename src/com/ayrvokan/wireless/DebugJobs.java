@@ -118,7 +118,7 @@ public final class DebugJobs {
                     catch (android.system.ErrnoException error) { if (error.errno != android.system.OsConstants.ESRCH) throw error; }
                 }
                 stopProbe(context, request);
-                for (String name : new String[] {"request.json.part", "worker.json.part", "state.json.part", "report.json.part", "failure.json.part", "server.json.part", "server-process.json.part", "guardian-report.json.part"}) java.nio.file.Files.deleteIfExists(new File(dir, name).toPath());
+                for (String name : new String[] {"request.json.part", "worker.json.part", "state.json.part", "report.json.part", "failure.json.part", "server.json.part", "server-process.json.part", "guardian-report.json.part", "guardian-worker.json.part", "guardian-worker-report.json.part", "guardian-failure.json.part"}) java.nio.file.Files.deleteIfExists(new File(dir, name).toPath());
                 File report = new File(dir, "report.json");
                 if (!report.isFile()) JadxJobs.write(report, new JSONObject().put("status", "interrupted").put("mode", request.getString("mode")).put("targetPid", request.getInt("targetPid")).put("recoveredUtc", java.time.Instant.now().toString()).put("lastSnapshotRetained", true));
                 store.job("debug", job.getString("id"), job.getString("label"), report.isFile() ? new JSONObject(JadxJobs.read(report)).getString("status") : "interrupted", report.isFile() ? "Finished debug session recovered" : "Controller exited; debug session recovered");

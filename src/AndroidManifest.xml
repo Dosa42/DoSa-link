@@ -19,6 +19,9 @@
         <service android:name="com.ayrvokan.wireless.DebugService" android:exported="false" android:process=":debugger" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Interactive local Java and native app debugging" />
         </service>
+        <service android:name="com.ayrvokan.wireless.NativeGuardianService" android:exported="false" android:process=":debugguardian" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Independent lifecycle guardian for local native breakpoint cleanup" />
+        </service>
         <service android:name="com.ayrvokan.wireless.DebugProbeService" android:exported="false" android:process=":debugprobe" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Dedicated local target for app breakpoint and inspection sessions" />
         </service>

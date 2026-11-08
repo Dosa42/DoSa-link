@@ -40,6 +40,7 @@ def main():
             symbols.append({'name': match[4], 'address': '0x' + match[1], 'bytes': int(match[2], 16), 'kind': match[3], 'addressKind': 'ELF virtual address before runtime load bias'})
     (SEED / 'symbols.json').write_text(json.dumps({'library': library.name, 'symbols': symbols, 'source': 'agent.cpp', 'sourceSha256': digest(ROOT / 'debugger/agent.cpp'), 'dwarfRetained': True}, indent=2) + '\n')
     shutil.copyfile(ROOT / 'debugger/agent.cpp', SEED / 'agent.cpp')
+    shutil.copyfile(ROOT / 'debugger/launcher.cpp', SEED / 'launcher.cpp')
     files = {p.name: digest(p) for p in sorted(SEED.iterdir()) if p.is_file() and p.name != 'tool.json'}
     report = {'schema': 'wireless-workshop.debugger/1', 'ndk': '27.2.12479018', 'abi': 'arm64-v8a', 'javaBackend': 'ART JVMTI via Debug.attachJvmtiAgent; API28+', 'nativeBackend': 'Bundled NDK lldb-server with in-app GDB remote client', 'files': files, 'symbols': len(symbols), 'sourceSha256': digest(ROOT / 'debugger/agent.cpp')}
     (SEED / 'tool.json').write_text(json.dumps(report, indent=2) + '\n')

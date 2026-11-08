@@ -21,7 +21,7 @@ import org.json.JSONObject;
 public final class NativeDebugger implements AutoCloseable {
     private final File directory;
     private final int pid;
-    private final Process server;
+    private final Context context;
     private final Socket socket;
     private final InputStream input;
     private final OutputStream output;
@@ -35,20 +35,20 @@ public final class NativeDebugger implements AutoCloseable {
     private boolean acknowledgments = true;
 
     public NativeDebugger(Context context, int target, File folder) throws Exception {
-        pid = target; directory = folder;
+        pid = target; directory = folder; this.context = context.getApplicationContext();
         transcript = new FileWriter(new File(folder, "rsp.jsonl"), true);
         try (InputStream source = context.getAssets().open("workshop/debugger/symbols.json"); ByteArrayOutputStream bytes = new ByteArrayOutputStream()) { JadxJobs.copy(source, bytes); symbols = new JSONObject(bytes.toString("UTF-8")).getJSONArray("symbols"); }
-        Process child = null; Socket connected = null;
+        Socket connected = null;
         try (ServerSocket listener = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
             listener.setSoTimeout(250);
             File executable = new File(context.getApplicationInfo().nativeLibraryDir, "libworkshop_lldb.so");
-            child = new ProcessBuilder(new File(context.getApplicationInfo().nativeLibraryDir, "libworkshop_lldb_launch.so").getPath(), new File(folder, "server-process.json").getPath(), executable.getPath(), "127.0.0.1:" + listener.getLocalPort(), Integer.toString(pid)).redirectOutput(new File(folder, "server-stdout.log")).redirectError(new File(folder, "server-stderr.log")).start();
+            context.startForegroundService(new android.content.Intent(context, NativeGuardianService.class).putExtra("id", folder.getName()).putExtra("port", listener.getLocalPort()).putExtra("targetPid", pid));
             long started = android.os.SystemClock.elapsedRealtime();
             while (connected == null) {
                 try { connected = listener.accept(); }
-                catch (java.net.SocketTimeoutException error) { if (!child.isAlive()) throw new java.io.IOException("LLDB server exited: " + TerminalJobs.tail(new File(folder, "server-stderr.log"))); if (android.os.SystemClock.elapsedRealtime() - started > 15000) throw new java.io.IOException("LLDB reverse connection failed: " + TerminalJobs.tail(new File(folder, "server-stderr.log"))); }
+                catch (java.net.SocketTimeoutException error) { if (new File(folder, "guardian-failure.json").isFile() || new File(folder, "guardian-worker-report.json").isFile()) throw new java.io.IOException("LLDB guardian startup failed: " + TerminalJobs.tail(new File(folder, "server-stderr.log"))); if (android.os.SystemClock.elapsedRealtime() - started > 15000) throw new java.io.IOException("LLDB reverse connection failed: " + TerminalJobs.tail(new File(folder, "server-stderr.log"))); }
             }
-            socket = connected; socket.setTcpNoDelay(true); input = socket.getInputStream(); output = socket.getOutputStream(); server = child;
+            socket = connected; socket.setTcpNoDelay(true); input = socket.getInputStream(); output = socket.getOutputStream();
             String supported = exchange("qSupported:xmlRegisters=aarch64");
             if (exchange("QStartNoAckMode").equals("OK")) acknowledgments = false;
             exchange("QSetDetachOnError:1");
@@ -61,8 +61,8 @@ public final class NativeDebugger implements AutoCloseable {
                 if (name != null) registers.put(name, i);
                 if ("cpsr".equals(name)) break;
             }
-            JadxJobs.write(new File(directory, "server.json"), new JSONObject().put("executable", executable.getPath()).put("executableSha256", JadxJobs.hash(executable)).put("supported", supported).put("targetPid", pid).put("transport", "reverse-connect loopback; app controller only").put("registers", new JSONObject(registers)));
-        } catch (Exception error) { if (connected != null) connected.close(); if (child != null) { child.destroy(); child.waitFor(); } transcript.close(); throw error; }
+            JadxJobs.write(new File(directory, "server.json"), new JSONObject().put("executable", executable.getPath()).put("executableSha256", JadxJobs.hash(executable)).put("supported", supported).put("targetPid", pid).put("transport", "reverse-connect loopback through independent app guardian process").put("registers", new JSONObject(registers)));
+        } catch (Exception error) { if (connected != null) connected.close(); context.stopService(new android.content.Intent(context, NativeGuardianService.class)); transcript.close(); throw error; }
     }
 
     private static Map<String, String> fields(String value) {
@@ -161,7 +161,15 @@ public final class NativeDebugger implements AutoCloseable {
     @Override public void close() throws Exception {
         Exception failure = null;
         try { if (!detached && !running) detach(); } catch (Exception error) { failure = error; }
-        try { socket.close(); } finally { if (server.isAlive()) server.destroy(); server.waitFor(); transcript.close(); }
+        try { socket.close(); }
+        finally {
+            File report = new File(directory, "guardian-worker-report.json"), error = new File(directory, "guardian-failure.json");
+            while (!report.isFile() && !error.isFile()) Thread.sleep(25);
+            File identity = new File(directory, "guardian-worker.json");
+            if (identity.isFile()) { int worker = new JSONObject(JadxJobs.read(identity)).getInt("pid"); while (new File("/proc/" + worker).exists()) Thread.sleep(25); }
+            transcript.close();
+            if (error.isFile() && failure == null) failure = new java.io.IOException(JadxJobs.read(error));
+        }
         if (failure != null) throw failure;
     }
 }
