@@ -40,7 +40,7 @@ def finish():
     output = ROOT / '.transfer/output'
     output.mkdir(parents=True, exist_ok=True)
     subprocess.run(['openssl', 'enc', '-aes-256-cbc', '-pbkdf2', '-iter', '200000', '-pass', 'env:WORKSHOP_INPUT_PASSWORD', '-in', str(ROOT / 'dist/wireless-workshop.apk'), '-out', str(output / 'wireless-workshop.apk.enc')], check=True)
-    for name in ['build.json', 'preservation.json', 'manifest-changes.json', 'packaged-manifest.xml', 'build.log', 'jadx-dependencies.json', 'jadx-package.json', 'jadx-jvm-fixture.json', 'jadx-jvm-multi-fixture.json', 'jadx-jvm-batch-fixture.json']:
+    for name in ['build.json', 'preservation.json', 'manifest-changes.json', 'packaged-manifest.xml', 'build.log', 'jadx-dependencies.json', 'jadx-package.json', 'jadx-jvm-fixture.json', 'jadx-jvm-multi-fixture.json', 'jadx-jvm-batch-fixture.json', 'terminal-package.json', 'terminal-build.log']:
         shutil.copyfile(ROOT / 'evidence' / name, output / name)
     receipt = {'run_id': os.environ['GITHUB_RUN_ID'], 'commit': os.environ['GITHUB_SHA'], 'repository': os.environ['GITHUB_REPOSITORY'], 'runner': os.environ['RUNNER_OS']}
     (output / 'remote-build.json').write_text(json.dumps(receipt, indent=2) + '\n')

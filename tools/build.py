@@ -88,7 +88,7 @@ def manifest():
         index += 1
         retained.append(name)
     target.write(WORK / 'AndroidManifest.xml', encoding='utf-8', xml_declaration=True)
-    (ROOT / 'evidence/manifest-changes.json').write_text(json.dumps({'package': root.get('package'), 'application': 'android.app.Application', 'activities': ['com.ayrvokan.wireless.MainActivity', 'com.ayrvokan.wireless.JadxActivity', 'com.ayrvokan.wireless.DiagnosticsActivity'], 'original_component_entry_points_registered': 0, 'providers': 0, 'services': 1, 'receivers': 0, 'retained_device_permissions': retained, 'omitted_permissions': removed}, indent=2) + '\n')
+    (ROOT / 'evidence/manifest-changes.json').write_text(json.dumps({'package': root.get('package'), 'application': 'android.app.Application', 'activities': ['com.ayrvokan.wireless.MainActivity', 'com.ayrvokan.wireless.JadxActivity', 'com.ayrvokan.wireless.DiagnosticsActivity', 'com.ayrvokan.wireless.TerminalActivity', 'com.ayrvokan.wireless.FilesActivity'], 'original_component_entry_points_registered': 0, 'providers': 0, 'services': 2, 'receivers': 0, 'retained_device_permissions': retained, 'omitted_permissions': removed}, indent=2) + '\n')
 
 def signing_key():
     private = ROOT / 'private'
@@ -157,6 +157,9 @@ def main():
                 name = str(asset.relative_to(WORK / 'jadx-seed'))
                 destination = 'lib/arm64-v8a/' + asset.name if name.startswith('native/') else 'assets/workshop/jadx/' + name
                 output.write(asset, destination)
+        for asset in sorted((WORK / 'terminal-seed').iterdir()):
+            destination = 'lib/arm64-v8a/' + asset.name if asset.suffix == '.so' else 'assets/workshop/terminal/' + asset.name
+            output.write(asset, destination)
     run('align-single-apk', ['zipalign', '-f', '-P', '16', '4', unsigned, WORK / 'aligned.apk'])
     unsigned.unlink()
     key, password = signing_key()
@@ -167,7 +170,7 @@ def main():
     run('verify-apk-alignment', ['zipalign', '-c', '-P', '16', '4', signed])
     final = ROOT / 'dist/wireless-workshop.apk'
     signed.replace(final)
-    receipt = {'package': 'com.ayrvokan.wireless', 'version': '0.3.0', 'artifact': str(final), 'bytes': final.stat().st_size, 'sha256': digest(final), 'baseline_apks': inputs, 'added_dex': 'classes' + str(highest + 1) + '.dex', 'editor': {'version': '1.4.9', 'sha256': EDITOR_SHA}, 'built_at_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
+    receipt = {'package': 'com.ayrvokan.wireless', 'version': '0.4.0', 'artifact': str(final), 'bytes': final.stat().st_size, 'sha256': digest(final), 'baseline_apks': inputs, 'added_dex': 'classes' + str(highest + 1) + '.dex', 'editor': {'version': '1.4.9', 'sha256': EDITOR_SHA}, 'built_at_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
     (ROOT / 'evidence/build.json').write_text(json.dumps(receipt, indent=2) + '\n')
     print(json.dumps({'stage': 'apk-built', 'artifact': str(final), 'bytes': receipt['bytes'], 'sha256': receipt['sha256']}), flush=True)
 

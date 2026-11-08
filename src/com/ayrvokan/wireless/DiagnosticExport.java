@@ -17,6 +17,7 @@ public final class DiagnosticExport {
     public static JSONObject write(Context context, WorkshopStore.TraceFilter filter, OutputStream destination) throws Exception {
         JSONObject manifest = new JSONObject().put("schema", "wireless-workshop.diagnostics/1").put("package", context.getPackageName()).put("version", context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName).put("exportedUtc", java.time.Instant.now().toString()).put("filters", filter.json());
         Set<String> jobs = new LinkedHashSet<>();
+        Set<String> terminals = new LinkedHashSet<>();
         JSONArray files = new JSONArray();
         long count = 0;
         try (WorkshopStore store = new WorkshopStore(context); ZipOutputStream zip = new ZipOutputStream(destination)) {
@@ -29,7 +30,10 @@ public final class DiagnosticExport {
                     JSONObject row = store.traceRow(c);
                     zip.write((row.toString() + "\n").getBytes(StandardCharsets.UTF_8)); count++;
                     String operation = row.getString("operation_id");
-                    if (row.getString("module").equals("jadx") && operation.matches("[a-zA-Z0-9-]+")) jobs.add(operation);
+                    if (operation.matches("[a-zA-Z0-9-]+")) {
+                        if (row.getString("module").equals("jadx")) jobs.add(operation);
+                        if (row.getString("module").equals("terminal")) terminals.add(operation);
+                    }
                 }
             }
             zip.closeEntry();
@@ -40,22 +44,31 @@ public final class DiagnosticExport {
                     if (!file.isFile()) file = new File(directory, name);
                     if (!file.isFile()) file = new File(directory, "working/" + name);
                     if (!file.isFile()) continue;
-                    long length = file.length();
-                    String entry = "jobs/" + id + "/" + name;
-                    zip.putNextEntry(new ZipEntry(entry));
-                    java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-                    try (FileInputStream input = new FileInputStream(file)) {
-                        byte[] buffer = new byte[65536]; long left = length;
-                        while (left > 0) { int n = input.read(buffer, 0, (int) Math.min(buffer.length, left)); if (n < 0) throw new java.io.EOFException("Diagnostic file changed during export: " + entry); zip.write(buffer, 0, n); digest.update(buffer, 0, n); left -= n; }
-                    }
-                    zip.closeEntry();
-                    StringBuilder hash = new StringBuilder(); for (byte part : digest.digest()) hash.append(String.format(java.util.Locale.ROOT, "%02x", part & 255));
-                    files.put(new JSONObject().put("path", entry).put("bytes", length).put("sha256", hash.toString()));
+                    attach(zip, files, file, "jobs/" + id + "/" + name);
+                }
+            }
+            for (String id : terminals) {
+                File directory = TerminalJobs.directory(context, id);
+                for (String name : new String[] {"request.json", "command.sh", "worker.json", "process.json", "stdin.log", "stdout.log", "stderr.log", "report.json", "failure.json"}) {
+                    File file = new File(directory, name);
+                    if (file.isFile()) attach(zip, files, file, "jobs/terminal/" + id + "/" + name);
                 }
             }
             manifest.put("eventCount", count).put("files", files).put("scope", "All matching events through maximumEventId; attached job logs and reports, excluding source/resource trees.");
             zip.putNextEntry(new ZipEntry("manifest.json")); zip.write(manifest.toString(2).getBytes(StandardCharsets.UTF_8)); zip.closeEntry();
         }
         return manifest;
+    }
+    private static void attach(ZipOutputStream zip, JSONArray files, File file, String entry) throws Exception {
+        long length = file.length();
+        zip.putNextEntry(new ZipEntry(entry));
+        java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+        try (FileInputStream input = new FileInputStream(file)) {
+            byte[] buffer = new byte[65536]; long left = length;
+            while (left > 0) { int n = input.read(buffer, 0, (int) Math.min(buffer.length, left)); if (n < 0) throw new java.io.EOFException("Diagnostic file changed during export: " + entry); zip.write(buffer, 0, n); digest.update(buffer, 0, n); left -= n; }
+        }
+        zip.closeEntry();
+        StringBuilder hash = new StringBuilder(); for (byte part : digest.digest()) hash.append(String.format(java.util.Locale.ROOT, "%02x", part & 255));
+        files.put(new JSONObject().put("path", entry).put("bytes", length).put("sha256", hash.toString()));
     }
 }

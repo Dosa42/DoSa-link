@@ -7,6 +7,8 @@ on:
       - 'src/**'
       - 'jadx/**'
       - 'native/**'
+      - 'terminal/**'
+      - 'tools/build_terminal.py'
       - 'tools/build_jadx.py'
       - 'tools/build.py'
       - 'tools/verify.py'
@@ -59,6 +61,8 @@ jobs:
         with:
           path: .build/jadx-seed
           key: ${{ steps.jadx-cache.outputs.cache-primary-key }}
+      - name: Build embedded local shell
+        run: python tools/build_terminal.py
       - name: Build and sign APK
         run: python tools/build.py
       - name: Verify preserved code and resources

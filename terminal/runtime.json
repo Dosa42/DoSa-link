@@ -1,0 +1,7 @@
+{
+  "name": "mksh",
+  "version": "R59c",
+  "sourceCommit": "71d564487c9b34f65961570073f037658e07eb06",
+  "url": "https://android.googlesource.com/platform/external/mksh/+archive/71d564487c9b34f65961570073f037658e07eb06.tar.gz",
+  "sha256": "f527bfe064593ef440ab938214a1868793a07d02932d06640d0a823122d1cb8e"
+}

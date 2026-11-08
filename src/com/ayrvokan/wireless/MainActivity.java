@@ -140,6 +140,8 @@ public final class MainActivity extends Activity {
         tools.addView(text("Check the app's storage and keep the result in Activity.", 14, MUTED));
         tools.addView(button("Check local storage", this::storageCheck));
         tools.addView(button("Open diagnostic logs", () -> startActivity(new android.content.Intent(this, DiagnosticsActivity.class))));
+        tools.addView(button("Open local terminal", () -> startActivity(new android.content.Intent(this, TerminalActivity.class))));
+        tools.addView(button("Open files", () -> startActivity(new android.content.Intent(this, FilesActivity.class))));
         tools.addView(button("Open JADX headless", () -> startActivity(new android.content.Intent(this, JadxActivity.class))));
         body.addView(text("Device connections are not configured yet.", 13, MUTED));
     }

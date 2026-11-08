@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.ayrvokan.wireless" android:versionCode="6" android:versionName="0.3.0">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.ayrvokan.wireless" android:versionCode="7" android:versionName="0.4.0">
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -12,6 +12,9 @@
         </activity>
         <activity android:name="com.ayrvokan.wireless.JadxActivity" android:exported="true" android:windowSoftInputMode="adjustResize" />
         <activity android:name="com.ayrvokan.wireless.DiagnosticsActivity" android:exported="true" android:windowSoftInputMode="adjustResize" />
+        <activity android:name="com.ayrvokan.wireless.TerminalActivity" android:exported="true" android:windowSoftInputMode="adjustResize" />
+        <activity android:name="com.ayrvokan.wireless.FilesActivity" android:exported="true" android:windowSoftInputMode="adjustResize" />
+        <service android:name="com.ayrvokan.wireless.TerminalService" android:exported="false" android:process=":terminal" android:foregroundServiceType="dataSync" />
         <service android:name="com.ayrvokan.wireless.JadxService" android:exported="false" android:process=":jadx" android:foregroundServiceType="dataSync" />
     </application>
 </manifest>

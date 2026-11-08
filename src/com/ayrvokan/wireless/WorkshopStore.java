@@ -13,7 +13,7 @@ import org.json.JSONObject;
 
 public final class WorkshopStore extends SQLiteOpenHelper {
     public WorkshopStore(Context context) {
-        super(context, "workshop.db", null, 3);
+        super(context, "workshop.db", null, 4);
     }
 
     @Override public void onCreate(SQLiteDatabase db) {
@@ -25,11 +25,18 @@ public final class WorkshopStore extends SQLiteOpenHelper {
         db.execSQL("INSERT INTO profiles VALUES ('fanlamp', 'Room light & fan', 'Six power-cycle modes', 'Not connected')");
         db.execSQL("INSERT INTO profiles VALUES ('nspanel', 'SONOFF NSPanel', 'Original model', 'Not connected')");
         createDiagnostics(db);
+        createJobKinds(db);
     }
 
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         if (oldVersion < 2) createJobs(db);
         if (oldVersion < 3) createDiagnostics(db);
+        if (oldVersion < 4) createJobKinds(db);
+    }
+
+    private void createJobKinds(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE jobs ADD COLUMN kind TEXT NOT NULL DEFAULT 'jadx'");
+        db.execSQL("CREATE INDEX jobs_kind ON jobs(kind,updated_at)");
     }
 
     private void createDiagnostics(SQLiteDatabase db) {
@@ -65,6 +72,10 @@ public final class WorkshopStore extends SQLiteOpenHelper {
     }
 
     public void job(String id, String label, String state, String detail) {
+        job("jadx", id, label, state, detail);
+    }
+
+    public void job(String kind, String id, String label, String state, String detail) {
         String session = sessionId();
         long started = System.currentTimeMillis();
         boolean unchanged = false;
@@ -74,6 +85,7 @@ public final class WorkshopStore extends SQLiteOpenHelper {
         ContentValues value = new ContentValues();
         value.put("id", id);
         value.put("label", label);
+        value.put("kind", kind);
         value.put("state", state);
         value.put("detail", detail);
         value.put("updated_at", System.currentTimeMillis());
@@ -83,20 +95,23 @@ public final class WorkshopStore extends SQLiteOpenHelper {
         if (!unchanged) {
             JSONObject payload = new JSONObject();
             try { payload.put("jobId", id).put("label", label).put("state", state); } catch (Exception error) { throw new IllegalStateException(error); }
-            trace("failed".equals(state) ? "ERROR" : "interrupted".equals(state) || "completed-with-errors".equals(state) ? "WARN" : "INFO", "jadx", state, session, id, "", "", "jni", detail, payload, System.currentTimeMillis() - started);
+            trace("failed".equals(state) ? "ERROR" : "interrupted".equals(state) || "completed-with-errors".equals(state) ? "WARN" : "INFO", kind, state, session, id, "", "", kind.equals("jadx") ? "jni" : "local-process", detail, payload, System.currentTimeMillis() - started);
         }
     }
 
     public void jobTrace(String id, String level, String phase, String message, JSONObject payload) {
+        String kind = "jadx";
         String session = sessionId();
         long started = System.currentTimeMillis();
-        try (Cursor cursor = getReadableDatabase().rawQuery("SELECT session_id,started_at FROM jobs WHERE id=?", new String[] {id})) { if (cursor.moveToFirst()) { session = cursor.getString(0); started = cursor.getLong(1); } }
-        trace(level, "jadx", phase, session, id, id + "-jni", "", "jni", message, payload, System.currentTimeMillis() - started);
+        try (Cursor cursor = getReadableDatabase().rawQuery("SELECT session_id,started_at,kind FROM jobs WHERE id=?", new String[] {id})) { if (cursor.moveToFirst()) { session = cursor.getString(0); started = cursor.getLong(1); kind = cursor.getString(2); } }
+        trace(level, kind, phase, session, id, id + (kind.equals("jadx") ? "-jni" : "-terminal"), "", kind.equals("jadx") ? "jni" : "local-process", message, payload, System.currentTimeMillis() - started);
     }
 
-    public JSONArray jobs() throws Exception {
+    public JSONArray jobs() throws Exception { return jobs("jadx"); }
+
+    public JSONArray jobs(String kind) throws Exception {
         JSONArray result = new JSONArray();
-        try (Cursor cursor = getReadableDatabase().rawQuery("SELECT id,label,state,detail,updated_at FROM jobs ORDER BY updated_at DESC", null)) {
+        try (Cursor cursor = getReadableDatabase().rawQuery("SELECT id,label,state,detail,updated_at FROM jobs WHERE kind=? ORDER BY updated_at DESC", new String[] {kind})) {
             while (cursor.moveToNext()) {
                 JSONObject item = new JSONObject();
                 item.put("id", cursor.getString(0));
