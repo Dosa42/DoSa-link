@@ -79,7 +79,7 @@ def main():
     candidate.replace(ROOT / 'dist/wireless-workshop.apk')
     seconds = round(time.monotonic() - started, 3)
     report = {'run': run['html_url'], 'version': receipt['version'], 'sha256': digest, 'bytes': receipt['bytes'], 'archiveBytes': size, 'prefixRetained': prefix, 'streams': 8, 'elapsedSeconds': seconds, 'archiveBytesPerSecond': round((size - prefix) / max(seconds, .001))}
-    (ROOT / 'evidence/delivery25-transfer.json').write_text(json.dumps(report, indent=2) + '\n')
+    (ROOT / 'evidence/artifact-transfer.json').write_text(json.dumps(report, indent=2) + '\n')
     shutil.rmtree(g.TRANSFER)
     print(json.dumps(report), flush=True)
 
