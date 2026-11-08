@@ -115,19 +115,6 @@ def main():
         'limitations': ['Opcode names use the model-100 table shared by nxt-1.61.1 through nxt-1.65.1; nxt-1.63.5 is not explicitly listed. Decoded text is a candidate interpretation, not restored editor source.', 'Compressed picture payloads are inventoried with exact offsets; pixels are not decoded.', 'This is the recovered vendor EU candidate, not a readback or version match of the working panel.'],
         'panelWritten': False,
     }
-    picture_report = ROOT / 'devices/nspanel/decoded/pictures/pictures.json'
-    if picture_report.exists():
-        exported = json.loads(picture_report.read_text())
-        if exported['sourceSha256'] != digest or exported['pictureCount'] != len(pictures):
-            raise ValueError('Picture export input identity mismatch')
-        for picture, output in zip(pictures, exported['pictures']):
-            path = picture_report.parent / output['file']
-            if picture['id'] != output['id'] or hashlib.sha256(path.read_bytes()).hexdigest() != output['pngSha256']:
-                raise ValueError('Picture export digest mismatch')
-            picture.update(decodedPixels=True, png='pictures/' + output['file'])
-        result['pictureDecoding'] = {'manifest': 'pictures/pictures.json', 'pictures': len(pictures), 'compressedPacketsValidated': exported['compressedPacketsValidated'], 'rgb565ConversionRoundtripsPassed': exported['rgb565ConversionRoundtripsPassed']}
-        result['limitations'] = [x for x in result['limitations'] if not x.startswith('Compressed picture')]
-        result['limitations'].append('RGB565 picture colors are recovered. Alpha and device blending behavior are not asserted.')
     target = ROOT / 'devices/nspanel/decoded/tft-analysis.json'
     target.write_text(json.dumps(result, indent=2, ensure_ascii=True) + '\n')
     print(json.dumps({'report': str(target), 'checks': checks, 'pages': len(pages), 'objects': len(objects), 'pictures': len(pictures), 'fonts': len(fonts), 'blocks': len(blocks), 'decodeErrors': len(errors), 'unknownMarkers': len(unknowns)}))
