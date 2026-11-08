@@ -10,3 +10,4 @@ tools/github.py
 jadx/.gradle/
 jadx/local.properties
 jadx/*/build/
+.runtime-inspect/

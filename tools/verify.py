@@ -103,11 +103,12 @@ def main():
             raise ValueError('Packaged catalog mismatch')
         tool = json.loads(archive.read('assets/workshop/jadx/tool.json'))
         for name, expected in tool['files'].items():
-            if sha(archive.read('assets/workshop/jadx/' + name)) != expected:
+            member = 'lib/arm64-v8a/' + Path(name).name if name.startswith('native/') else 'assets/workshop/jadx/' + name
+            if sha(archive.read(member)) != expected:
                 raise ValueError('Bundled engine input changed: ' + name)
-        if tool['version'] != '1.5.6' or len(tool['pluginProviders']) < 3:
+        if tool['version'] != '1.5.6' or tool.get('backend') != 'jni-hotspot' or len(tool['pluginProviders']) < 3:
             raise ValueError('JADX engine/plugin manifest mismatch')
-        report = {'bundled_jadx_version': tool['version'], 'bundled_jadx_engine_sha256': tool['engineSha256'], 'bundled_tool_files_verified': len(tool['files']), 'status': 'pass' if not missing_resources else 'resource-payload-review-required', 'original_apks': original_apks, 'byte_identical_original_code': categories, 'code_files_checked': len(expected_members), 'resource_ids_preserved': len(expected_ids), 'resource_ids_changed_or_missing': changed_ids, 'distinct_resource_payloads_checked': len(expected_resources), 'resource_payload_hashes_missing': missing_resources, 'locales': locales, 'private_startup_components': components, 'application': application.get(NS + 'name'), 'package': manifest.get('package'), 'single_apk': True, 'catalog_classes': len(catalog['classes']), 'catalog_bridge_declarations': catalog['bridgeDeclarations'], 'runtime_executed': False}
+        report = {'bundled_runtime_backend': tool['backend'], 'bundled_runtime_version': tool['runtimeVersion'], 'bundled_native_bridge_sha256': tool['nativeBridgeSha256'], 'bundled_jadx_version': tool['version'], 'bundled_jadx_engine_sha256': tool['engineSha256'], 'bundled_tool_files_verified': len(tool['files']), 'status': 'pass' if not missing_resources else 'resource-payload-review-required', 'original_apks': original_apks, 'byte_identical_original_code': categories, 'code_files_checked': len(expected_members), 'resource_ids_preserved': len(expected_ids), 'resource_ids_changed_or_missing': changed_ids, 'distinct_resource_payloads_checked': len(expected_resources), 'resource_payload_hashes_missing': missing_resources, 'locales': locales, 'private_startup_components': components, 'application': application.get(NS + 'name'), 'package': manifest.get('package'), 'single_apk': True, 'catalog_classes': len(catalog['classes']), 'catalog_bridge_declarations': catalog['bridgeDeclarations'], 'runtime_executed': False}
         (ROOT / 'evidence/preservation.json').write_text(json.dumps(report, indent=2) + '\n')
         (ROOT / 'evidence/packaged-manifest.xml').write_bytes(AXMLPrinter(archive.read('AndroidManifest.xml')).get_xml())
     if missing_resources:

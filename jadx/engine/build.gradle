@@ -1,35 +1,11 @@
 plugins {
-    id 'com.android.application'
+    id 'java'
 }
-android {
-    namespace 'com.ayrvokan.jadxengine'
-    compileSdk 35
-    defaultConfig {
-        applicationId 'com.ayrvokan.jadxengine'
-        minSdk 26
-        targetSdk 35
-        versionCode 1
-        versionName '1.5.6'
-    }
-    compileOptions {
-        coreLibraryDesugaringEnabled true
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-    buildTypes {
-        release {
-            minifyEnabled false
-        }
-    }
-    packaging {
-        resources {
-            excludes += ['META-INF/DEPENDENCIES', 'META-INF/INDEX.LIST', 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA']
-            merges += ['META-INF/services/**', 'META-INF/LICENSE*', 'META-INF/NOTICE*']
-        }
-    }
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
 }
 configurations.configureEach {
-    exclude group: 'ch.qos.logback'
     exclude group: 'io.github.skylot', module: 'jadx-java-convert'
 }
 dependencies {
@@ -39,22 +15,24 @@ dependencies {
     implementation 'io.github.skylot:jadx-java-input:1.5.6'
     implementation 'io.github.skylot:jadx-smali-input:1.5.6'
     implementation 'io.github.skylot:jadx-kotlin-metadata:1.5.6'
-    implementation 'com.github.tony19:logback-android:3.0.0'
+    implementation 'ch.qos.logback:logback-classic:1.5.18'
     implementation 'org.slf4j:slf4j-api:2.0.17'
-    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    implementation 'org.json:json:20250517'
 }
 tasks.register('recordDependencies') {
+    dependsOn tasks.named('jar')
     doLast {
-        def entries = configurations.releaseRuntimeClasspath.resolvedConfiguration.resolvedArtifacts.collect {
+        def entries = configurations.runtimeClasspath.resolvedConfiguration.resolvedArtifacts.collect {
             def hash = java.security.MessageDigest.getInstance('SHA-256').digest(it.file.bytes).encodeHex().toString()
             [coordinate: it.moduleVersion.id.toString(), file: it.file.name, sha256: hash]
         }.sort { it.coordinate }
         def target = new File(rootProject.projectDir.parentFile, 'evidence/jadx-dependencies.json')
         target.parentFile.mkdirs()
         target.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(entries)) + '\n'
-        def core = configurations.releaseRuntimeClasspath.resolvedConfiguration.resolvedArtifacts.find { it.moduleVersion.id.group == 'io.github.skylot' && it.moduleVersion.id.name == 'jadx-core' }
-        new java.util.jar.JarFile(core.file).withCloseable { jar ->
-            new File(target.parentFile, 'jadx-upstream-manifest.mf').bytes = jar.getInputStream(jar.getJarEntry('META-INF/MANIFEST.MF')).bytes
+        def output = new File(rootProject.projectDir, 'engine/build/runtime-libs')
+        output.mkdirs()
+        configurations.runtimeClasspath.files.each { file ->
+            java.nio.file.Files.copy(file.toPath(), new File(output, file.name).toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
         }
     }
 }

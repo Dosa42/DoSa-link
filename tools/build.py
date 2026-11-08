@@ -154,7 +154,9 @@ def main():
         output.writestr('assets/workshop/catalog.json', catalog())
         for asset in sorted((WORK / 'jadx-seed').rglob('*')):
             if asset.is_file():
-                output.write(asset, 'assets/workshop/jadx/' + str(asset.relative_to(WORK / 'jadx-seed'))) 
+                name = str(asset.relative_to(WORK / 'jadx-seed'))
+                destination = 'lib/arm64-v8a/' + asset.name if name.startswith('native/') else 'assets/workshop/jadx/' + name
+                output.write(asset, destination)
     run('align-single-apk', ['zipalign', '-f', '-P', '16', '4', unsigned, WORK / 'aligned.apk'])
     unsigned.unlink()
     key, password = signing_key()
@@ -165,7 +167,7 @@ def main():
     run('verify-apk-alignment', ['zipalign', '-c', '-P', '16', '4', signed])
     final = ROOT / 'dist/wireless-workshop.apk'
     signed.replace(final)
-    receipt = {'package': 'com.ayrvokan.wireless', 'version': '0.2.1', 'artifact': str(final), 'bytes': final.stat().st_size, 'sha256': digest(final), 'baseline_apks': inputs, 'added_dex': 'classes' + str(highest + 1) + '.dex', 'editor': {'version': '1.4.9', 'sha256': EDITOR_SHA}, 'built_at_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
+    receipt = {'package': 'com.ayrvokan.wireless', 'version': '0.2.2', 'artifact': str(final), 'bytes': final.stat().st_size, 'sha256': digest(final), 'baseline_apks': inputs, 'added_dex': 'classes' + str(highest + 1) + '.dex', 'editor': {'version': '1.4.9', 'sha256': EDITOR_SHA}, 'built_at_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
     (ROOT / 'evidence/build.json').write_text(json.dumps(receipt, indent=2) + '\n')
     print(json.dumps({'stage': 'apk-built', 'artifact': str(final), 'bytes': receipt['bytes'], 'sha256': receipt['sha256']}), flush=True)
 

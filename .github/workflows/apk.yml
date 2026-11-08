@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/**'
       - 'jadx/**'
+      - 'native/**'
       - 'tools/build_jadx.py'
       - 'tools/build.py'
       - 'tools/verify.py'
@@ -33,7 +34,7 @@ jobs:
           python-version: '3.12'
       - uses: android-actions/setup-android@v4
         with:
-          packages: 'platforms;android-35 build-tools;35.0.0'
+          packages: 'platforms;android-35 build-tools;35.0.0 ndk;27.2.12479018'
           log-accepted-android-sdk-licenses: false
       - name: Prepare Android tools
         run: |
@@ -46,7 +47,7 @@ jobs:
         id: jadx-cache
         with:
           path: .build/jadx-seed
-          key: jadx-engine-${{ runner.os }}-${{ hashFiles('jadx/**', 'tools/build_jadx.py') }}
+          key: jadx-engine-${{ runner.os }}-${{ hashFiles('jadx/**', 'native/**', 'tools/build_jadx.py') }}
       - name: Restore private inputs
         env:
           WORKSHOP_INPUT_PASSWORD: ${{ secrets.WORKSHOP_INPUT_PASSWORD }}

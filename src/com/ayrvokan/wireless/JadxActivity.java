@@ -39,6 +39,7 @@ public final class JadxActivity extends Activity {
     private TextView selected;
     private EditText className;
     private EditText advanced;
+    private EditText vmOptions;
     private String source = "asset:workshop/jadx/fixtures/fixture.apk";
     private String label = "fixture.apk";
     private String exporting;
@@ -69,7 +70,7 @@ public final class JadxActivity extends Activity {
         scroll.addView(root);
         setContentView(scroll);
         root.addView(text("JADX HEADLESS", 24, ACCENT));
-        root.addView(text("Bundled engine · APK, DEX, Java and smali", 15, TEXT));
+        root.addView(text("Embedded JVM · staged APK, DEX, Java and smali", 15, TEXT));
         try {
             java.io.ByteArrayOutputStream value = new java.io.ByteArrayOutputStream();
             try (InputStream input = getAssets().open("workshop/jadx/tool.json")) { JadxJobs.copy(input, value); }
@@ -112,6 +113,9 @@ public final class JadxActivity extends Activity {
         root.addView(text("Advanced JADX options (input and output paths are managed by the app)", 15, TEXT));
         advanced = edit("For example: --show-bad-code");
         root.addView(advanced);
+        root.addView(text("JVM options (optional; empty uses the bundled JVM defaults)", 15, TEXT));
+        vmOptions = edit("For example: -Xmx3g");
+        root.addView(vmOptions);
         root.addView(button("Run JADX", this::runJob));
         root.addView(button("Refresh jobs", () -> { lastHistory = ""; renderHistory(); }));
         history = column();
@@ -122,6 +126,7 @@ public final class JadxActivity extends Activity {
             label = saved.getString("label", label);
             className.setText(saved.getString("className", ""));
             advanced.setText(saved.getString("advanced", ""));
+            vmOptions.setText(saved.getString("vmOptions", ""));
             exporting = saved.getString("exporting");
             selected.setText(label);
         }
@@ -151,6 +156,7 @@ public final class JadxActivity extends Activity {
                     else { source = getIntent().getStringExtra("input"); label = source.startsWith("apk-dex:") ? source.substring(8) : new File(source).getName(); selected.setText(label); }
                     className.setText(getIntent().getStringExtra("selectedClass"));
                     advanced.setText(getIntent().getStringExtra("options"));
+                    vmOptions.setText(getIntent().getStringExtra("vmOptions"));
                     if (getIntent().getBooleanExtra("run", false)) runJob();
                 }
             });
@@ -170,9 +176,10 @@ public final class JadxActivity extends Activity {
         String filter = className.getText().toString().trim();
         try {
             JSONArray options = JadxJobs.options(advanced.getText().toString());
+            JSONArray jvm = JadxJobs.options(vmOptions.getText().toString());
             new Thread(() -> {
                 try {
-                    String id = JadxJobs.start(getApplicationContext(), input, name, filter, options);
+                    String id = JadxJobs.start(getApplicationContext(), input, name, filter, options, jvm);
                     message("Started " + id);
                 } catch (Exception error) { message(error.toString()); }
             }, "jadx-start").start();
@@ -386,6 +393,7 @@ public final class JadxActivity extends Activity {
         state.putString("label", label);
         state.putString("className", className.getText().toString());
         state.putString("advanced", advanced.getText().toString());
+        state.putString("vmOptions", vmOptions.getText().toString());
         state.putString("exporting", exporting);
         super.onSaveInstanceState(state);
     }

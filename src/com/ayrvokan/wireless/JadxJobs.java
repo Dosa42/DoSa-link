@@ -68,6 +68,18 @@ public final class JadxJobs {
         if (file.exists() && !file.delete()) throw new java.io.IOException("Unable to remove unfinished file: " + file.getName());
     }
 
+    private static void retainLogs(File dir) throws Exception {
+        File working = new File(dir, "working");
+        File[] files = working.listFiles();
+        if (files == null) return;
+        for (File file : files) {
+            String name = file.getName();
+            if (file.isFile() && (name.equals("console.log") || name.equals("jadx.log") || name.startsWith("hs_err_pid"))) {
+                java.nio.file.Files.copy(file.toPath(), new File(dir, name).toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+    }
+
     public static boolean alive(Context context, int pid) {
         ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
         List<ActivityManager.RunningAppProcessInfo> processes = manager.getRunningAppProcesses();
@@ -88,9 +100,11 @@ public final class JadxJobs {
                 File runtime = new File(dir, "worker.json");
                 int pid = runtime.exists() ? new JSONObject(read(runtime)).optInt("pid", -1) : -1;
                 if (alive(context, pid)) continue;
+                retainLogs(dir);
                 remove(new File(dir, "working"));
                 remove(new File(dir, "input"));
                 remove(new File(context.getCodeCacheDir(), "jadx/engine.part"));
+                NativeJadx.cleanUnfinished(context);
                 for (String name : new String[] {"progress.json.part", "request.json.part", "worker.json.part"}) remove(new File(dir, name));
                 boolean finalized = new File(dir, "result/engine-report.json").isFile();
                 String resolved = finalized ? new JSONObject(read(new File(dir, "result/engine-report.json"))).getString("status") : state.equals("stopping") ? "stopped" : "interrupted";
@@ -100,7 +114,7 @@ public final class JadxJobs {
         }
     }
 
-    public static String start(Context context, String source, String label, String selectedClass, JSONArray options) throws Exception {
+    public static String start(Context context, String source, String label, String selectedClass, JSONArray options, JSONArray vmOptions) throws Exception {
         try (WorkshopStore store = new WorkshopStore(context)) {
             String id = System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 8);
             File dir = directory(context, id);
@@ -116,7 +130,7 @@ public final class JadxJobs {
                     if (runtime.isFile() && alive(context, new JSONObject(read(runtime)).optInt("pid", -1))) throw new IllegalStateException("The previous worker is finishing; retry Run shortly");
                 }
                 dir.mkdirs();
-                JSONObject request = new JSONObject().put("id", id).put("label", label).put("source", source).put("selectedClass", selectedClass).put("options", options);
+                JSONObject request = new JSONObject().put("id", id).put("label", label).put("source", source).put("selectedClass", selectedClass).put("options", options).put("vmOptions", vmOptions);
                 write(new File(dir, "request.json"), request);
                 store.job(id, label, "queued", "Starting bundled JADX worker");
                 store.event("jadx", id + ": queued " + label);
@@ -149,9 +163,11 @@ public final class JadxJobs {
             store.job(id, request.getString("label"), "stopping", "Explicit stop requested");
             if (alive(context, pid)) android.os.Process.killProcess(pid);
             while (alive(context, pid)) Thread.sleep(50);
+            retainLogs(dir);
             remove(new File(dir, "working"));
             remove(new File(dir, "input"));
             remove(new File(context.getCodeCacheDir(), "jadx/engine.part"));
+            NativeJadx.cleanUnfinished(context);
             for (String name : new String[] {"progress.json.part", "request.json.part", "worker.json.part"}) remove(new File(dir, name));
             File report = new File(dir, "result/engine-report.json");
             String state = report.isFile() ? new JSONObject(read(report)).getString("status") : "stopped";

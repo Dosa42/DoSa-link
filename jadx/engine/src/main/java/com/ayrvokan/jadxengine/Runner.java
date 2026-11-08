@@ -19,10 +19,22 @@ import jadx.api.JadxDecompiler;
 import jadx.api.plugins.JadxPlugin;
 import jadx.cli.JadxCLIArgs;
 import jadx.core.plugins.files.IJadxFilesGetter;
-import jadx.api.security.JadxSecurityFlag;
-import jadx.api.security.impl.JadxSecurity;
+import jadx.api.JavaClass;
+import jadx.core.dex.nodes.ClassNode;
+import jadx.core.dex.attributes.AFlag;
+import jadx.core.dex.visitors.SaveCode;
+import jadx.core.utils.tasks.TaskExecutor;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class Runner {
+    public static void main(String[] arguments) throws Exception {
+        if (arguments.length != 3) throw new IllegalArgumentException("Expected request, output and progress paths");
+        System.out.println(run(arguments[0], arguments[1], arguments[2]));
+    }
+
     private static void write(File file, JSONObject value) throws Exception {
         File temp = new File(file.getPath() + ".part");
         Files.write(temp.toPath(), value.toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -81,9 +93,6 @@ public final class Runner {
                 @Override public Path getCacheDir() { return directory("cache"); }
                 @Override public Path getTempDir() { return directory("temp"); }
             });
-            java.util.Set<JadxSecurityFlag> flags = JadxSecurityFlag.all();
-            flags.remove(JadxSecurityFlag.SECURE_XML_PARSER);
-            args.setSecurity(new JadxSecurity(flags));
             JSONArray plugins = new JSONArray();
             for (JadxPlugin plugin : ServiceLoader.load(JadxPlugin.class, Runner.class.getClassLoader())) plugins.put(plugin.getPluginInfo().getPluginId());
             JSONObject report = new JSONObject();
@@ -96,17 +105,73 @@ public final class Runner {
             report.put("loggerClassLoader", LoggerFactory.class.getClassLoader().toString());
             report.put("runtime", System.getProperty("java.vm.name"));
             report.put("heapLimit", Runtime.getRuntime().maxMemory());
-            report.put("workerPid", android.os.Process.myPid());
+            report.put("workerPid", ProcessHandle.current().pid());
+            report.put("javaVersion", System.getProperty("java.version"));
+            report.put("runtimeBackend", "jni-hotspot");
+            report.put("staging", "shared-analysis-context/ordered-dex-output");
+            report.put("metadataLoadCount", 1);
+            report.put("crossDexContextPreserved", true);
             File progress = new File(progressPath);
             write(progress, new JSONObject().put("phase", "Loading input").put("completed", 0).put("total", 0));
             try (JadxDecompiler jadx = new JadxDecompiler(args)) {
                 jadx.load();
                 report.put("classes", jadx.getClasses().size());
                 report.put("resources", jadx.getResources().size());
-                jadx.save(1000, (done, total) -> {
-                    try { write(progress, new JSONObject().put("phase", "Decompiling").put("completed", done).put("total", total)); }
-                    catch (Exception error) { logger.warn("Unable to record progress", error); }
-                });
+                JSONArray stages = new JSONArray();
+                if (!args.isSkipResources()) {
+                    write(progress, new JSONObject().put("phase", "Saving resources").put("completed", 0).put("total", jadx.getResources().size()));
+                    jadx.saveResources();
+                }
+                AtomicInteger exported = new AtomicInteger();
+                java.util.Set<String> saved = ConcurrentHashMap.newKeySet();
+                if (!args.isSkipSources()) {
+                    Map<String, List<JavaClass>> groups = new LinkedHashMap<>();
+                    for (JavaClass cls : jadx.getClasses()) {
+                        ClassNode node = cls.getClassNode();
+                        if (node.contains(AFlag.DONT_GENERATE)) continue;
+                        if (args.getClassFilter() != null && !args.getClassFilter().test(node.getClassInfo().getFullName())) continue;
+                        String origin = node.getInputFileName();
+                        if (origin == null) origin = "generated";
+                        java.util.regex.Matcher dex = java.util.regex.Pattern.compile("classes(?:[0-9]+)?\\.dex").matcher(origin);
+                        String key = dex.find() ? dex.group() : new File(origin).getName();
+                        groups.computeIfAbsent(key, value -> new ArrayList<>()).add(cls);
+                    }
+                    int stageNumber = 0;
+                    for (Map.Entry<String, List<JavaClass>> group : groups.entrySet()) {
+                        stageNumber++;
+                        long stageStarted = System.currentTimeMillis();
+                        String phase = "DEX " + stageNumber + "/" + groups.size() + ": " + group.getKey();
+                        int before = exported.get();
+                        TaskExecutor executor = new TaskExecutor();
+                        executor.setThreadsCount(args.getThreadsCount());
+                        List<Runnable> tasks = new ArrayList<>();
+                        for (List<JavaClass> batch : jadx.getDecompileScheduler().buildBatches(group.getValue())) {
+                            tasks.add(() -> {
+                                for (JavaClass cls : batch) {
+                                    ClassNode node = cls.getClassNode();
+                                    if (!saved.add(node.getRawName())) continue;
+                                    try {
+                                        SaveCode.save(args.getOutDirSrc(), node, node.getCode());
+                                        exported.incrementAndGet();
+                                    } catch (Exception error) {
+                                        logger.error("Unable to save " + node.getRawName(), error);
+                                        saved.remove(node.getRawName());
+                                    }
+                                }
+                            });
+                        }
+                        executor.addParallelTasks(tasks);
+                        executor.execute();
+                        while (executor.isRunning()) {
+                            write(progress, new JSONObject().put("phase", phase).put("stage", stageNumber).put("stages", groups.size()).put("completed", executor.getProgress()).put("total", executor.getTasksCount()));
+                            Thread.sleep(1000);
+                        }
+                        executor.awaitTermination();
+                        stages.put(new JSONObject().put("input", group.getKey()).put("classesSelected", group.getValue().size()).put("classesExported", exported.get() - before).put("elapsedMillis", System.currentTimeMillis() - stageStarted));
+                    }
+                }
+                report.put("stages", stages);
+                report.put("exportedClasses", exported.get());
                 jadx.printErrorsReport();
                 report.put("errors", jadx.getErrorsCount());
                 report.put("warnings", jadx.getWarnsCount());
@@ -115,10 +180,14 @@ public final class Runner {
             report.put("status", report.getInt("errors") == 0 ? "completed" : "completed-with-errors");
             write(new File(output, "engine-report.json"), report);
             return report.toString();
+        } catch (Throwable error) {
+            error.printStackTrace(console);
+            throw error;
         } finally {
             logger.detachAppender(appender);
             appender.stop();
             encoder.stop();
+            context.stop();
             console.close();
             System.setOut(previousOut);
             System.setErr(previousErr);

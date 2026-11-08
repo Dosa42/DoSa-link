@@ -221,7 +221,7 @@ public final class MainActivity extends Activity {
             Toast.makeText(this, "Workspace saved", Toast.LENGTH_SHORT).show();
         }));
         LinearLayout about = card(body);
-        about.addView(text("Wireless Workshop 0.2.1", 18, TEXT));
+        about.addView(text("Wireless Workshop 0.2.2", 18, TEXT));
         about.addView(text("Personal APK · ARM64\nOriginal device code: eWeLink 5.30.0", 14, MUTED));
         about.addView(button("Clear activity history", () -> {
             store.clearEvents();

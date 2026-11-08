@@ -1,0 +1,10 @@
+{
+  "url": "https://github.com/AngelAuraMC/angelauramc-openjdk-build/releases/download/download_jre17/jre17-android-arm64.tar.xz",
+  "sha256": "e162c860fe05ee4a4e4af7606437419879f6c748386a7b09fa77d10db6a64091",
+  "upstreamRelease": "https://github.com/AngelAuraMC/angelauramc-openjdk-build/releases/tag/download_jre17",
+  "upstreamAssetId": 388605791,
+  "architecture": "aarch64",
+  "version": "17.0.19",
+  "source": "Android OpenJDK distributed by AngelAuraMC; fork of OpenJDK mobile",
+  "sourceRevision": "bce66e310857+"
+}
