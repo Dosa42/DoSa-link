@@ -62,7 +62,12 @@ public final class JadxService extends Service {
                 request.put("input", input.getPath());
                 request.put("inputSha256", JadxJobs.hash(input));
                 JadxJobs.write(new File(dir, "request.json"), request);
-                String reportText = NativeJadx.run(this, new File(dir, "request.json"), working, new File(dir, "progress.json"));
+                store.jobTrace(id, "INFO", "input", "Input prepared", new JSONObject().put("source", source).put("inputSha256", request.getString("inputSha256")).put("bytes", input.length()).put("options", request.getJSONArray("options")).put("vmOptions", request.getJSONArray("vmOptions")).put("selectedClass", request.optString("selectedClass")));
+                String reportText;
+                try (JobDiagnostics diagnostics = new JobDiagnostics(store, id, dir)) {
+                    try { reportText = NativeJadx.run(this, new File(dir, "request.json"), working, new File(dir, "progress.json")); diagnostics.returned(new JSONObject(reportText)); }
+                    catch (Throwable error) { diagnostics.failed(error); throw error; }
+                }
                 JSONObject report = new JSONObject(reportText);
                 report.put("inputSha256", request.getString("inputSha256"));
                 JSONObject tool;
@@ -92,7 +97,6 @@ public final class JadxService extends Service {
                 if (!working.renameTo(result)) throw new java.io.IOException("Unable to finalize completed result");
                 JadxJobs.remove(new File(dir, "input"));
                 store.job(id, label, report.getString("status"), report.getInt("classes") + " classes; " + report.getInt("errors") + " errors; " + report.getInt("warnings") + " warnings");
-                store.event("jadx", id + ": " + report.getString("status") + " " + label);
             } catch (Throwable error) {
                 Throwable cause = error instanceof java.lang.reflect.InvocationTargetException ? error.getCause() : error;
                 String detail = cause.toString();
@@ -102,7 +106,6 @@ public final class JadxService extends Service {
                 JadxJobs.remove(new File(dir, "input"));
                 JadxJobs.write(new File(dir, "failure.json"), new JSONObject().put("error", detail).put("stack", android.util.Log.getStackTraceString(cause)));
                 store.job(id, label, "failed", detail);
-                store.event("jadx", id + ": failed " + detail);
             }
         } catch (Exception failure) {
             android.util.Log.e("WorkshopJadx", "Job finalization failed", failure);
@@ -118,7 +121,7 @@ public final class JadxService extends Service {
     }
 
     @Override public void onTimeout(int startId, int type) {
-        try (WorkshopStore store = new WorkshopStore(this)) { store.event("jadx", active + ": Android stopped the foreground service"); }
+        try (WorkshopStore store = new WorkshopStore(this)) { store.jobTrace(active, "WARN", "timeout", "Android stopped the foreground service", new JSONObject()); }
         stopForeground(STOP_FOREGROUND_REMOVE);
         stopSelf();
         android.os.Process.killProcess(android.os.Process.myPid());

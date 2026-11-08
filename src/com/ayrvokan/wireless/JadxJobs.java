@@ -109,7 +109,6 @@ public final class JadxJobs {
                 boolean finalized = new File(dir, "result/engine-report.json").isFile();
                 String resolved = finalized ? new JSONObject(read(new File(dir, "result/engine-report.json"))).getString("status") : state.equals("stopping") ? "stopped" : "interrupted";
                 store.job(job.getString("id"), job.getString("label"), resolved, finalized ? "Finished output recovered" : "Unfinished working files cleaned");
-                store.event("jadx", job.getString("id") + ": " + resolved);
             }
         }
     }
@@ -133,7 +132,6 @@ public final class JadxJobs {
                 JSONObject request = new JSONObject().put("id", id).put("label", label).put("source", source).put("selectedClass", selectedClass).put("options", options).put("vmOptions", vmOptions);
                 write(new File(dir, "request.json"), request);
                 store.job(id, label, "queued", "Starting bundled JADX worker");
-                store.event("jadx", id + ": queued " + label);
                 database.setTransactionSuccessful();
             } catch (Exception error) {
                 remove(dir);
@@ -172,7 +170,6 @@ public final class JadxJobs {
             File report = new File(dir, "result/engine-report.json");
             String state = report.isFile() ? new JSONObject(read(report)).getString("status") : "stopped";
             store.job(id, request.getString("label"), state, report.isFile() ? "Job finished before Stop" : "Unfinished working files cleaned after explicit Stop");
-            store.event("jadx", id + ": " + state + "; explicit Stop handled and unfinished files cleaned");
         }
     }
 

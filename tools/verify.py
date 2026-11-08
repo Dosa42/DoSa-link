@@ -82,9 +82,9 @@ def main():
         components = {name: len(application.findall(name)) for name in ['activity', 'service', 'receiver', 'provider']}
         if manifest.get('package') != 'com.ayrvokan.wireless' or application.get(NS + 'name') != 'android.app.Application':
             raise ValueError('Unexpected private app identity/startup')
-        if components != {'activity': 2, 'service': 1, 'receiver': 0, 'provider': 0} or activities[0].get(NS + 'name') != 'com.ayrvokan.wireless.MainActivity':
+        if components != {'activity': 3, 'service': 1, 'receiver': 0, 'provider': 0} or activities[0].get(NS + 'name') != 'com.ayrvokan.wireless.MainActivity':
             raise ValueError('Unexpected startup components')
-        if {item.get(NS + 'name') for item in activities} != {'com.ayrvokan.wireless.MainActivity', 'com.ayrvokan.wireless.JadxActivity'}:
+        if {item.get(NS + 'name') for item in activities} != {'com.ayrvokan.wireless.MainActivity', 'com.ayrvokan.wireless.JadxActivity', 'com.ayrvokan.wireless.DiagnosticsActivity'}:
             raise ValueError('Unexpected activities')
         service = application.find('service')
         if service.get(NS + 'name') != 'com.ayrvokan.wireless.JadxService' or service.get(NS + 'process') != ':jadx' or service.get(NS + 'exported') != 'false':

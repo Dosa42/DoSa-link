@@ -139,6 +139,7 @@ public final class MainActivity extends Activity {
         tools.addView(text("Local diagnostics", 19, TEXT));
         tools.addView(text("Check the app's storage and keep the result in Activity.", 14, MUTED));
         tools.addView(button("Check local storage", this::storageCheck));
+        tools.addView(button("Open diagnostic logs", () -> startActivity(new android.content.Intent(this, DiagnosticsActivity.class))));
         tools.addView(button("Open JADX headless", () -> startActivity(new android.content.Intent(this, JadxActivity.class))));
         body.addView(text("Device connections are not configured yet.", 13, MUTED));
     }
@@ -189,6 +190,7 @@ public final class MainActivity extends Activity {
 
     private void activity(LinearLayout body) throws Exception {
         title(body, "Activity", "Saved on this phone.");
+        body.addView(button("Open diagnostic logs", () -> startActivity(new android.content.Intent(this, DiagnosticsActivity.class))));
         JSONArray events = store.events(100);
         SimpleDateFormat format = new SimpleDateFormat("dd MMM · HH:mm:ss", Locale.getDefault());
         for (int i = 0; i < events.length(); i++) {
@@ -221,7 +223,9 @@ public final class MainActivity extends Activity {
             Toast.makeText(this, "Workspace saved", Toast.LENGTH_SHORT).show();
         }));
         LinearLayout about = card(body);
-        about.addView(text("Wireless Workshop 0.2.3", 18, TEXT));
+        String version;
+        try { version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception error) { version = ""; }
+        about.addView(text("Wireless Workshop " + version, 18, TEXT));
         about.addView(text("Personal APK · ARM64\nOriginal device code: eWeLink 5.30.0", 14, MUTED));
         about.addView(button("Clear activity history", () -> {
             store.clearEvents();
@@ -231,20 +235,10 @@ public final class MainActivity extends Activity {
     }
 
     private void storageCheck() {
-        File file = new File(getFilesDir(), "storage-check.tmp");
-        try {
-            byte[] expected = ("workshop-" + System.nanoTime()).getBytes(StandardCharsets.UTF_8);
-            try (FileOutputStream output = new FileOutputStream(file)) { output.write(expected); }
-            byte[] actual = read(new FileInputStream(file));
-            if (!java.util.Arrays.equals(expected, actual)) throw new IllegalStateException("Storage contents did not match");
-            store.event("check", "Local storage write/read passed");
-            snapshot();
-            Toast.makeText(this, "Storage check passed", Toast.LENGTH_SHORT).show();
-        } catch (Exception error) {
-            problem(error);
-        } finally {
-            if (file.exists()) file.delete();
-        }
+        new Thread(() -> {
+            try { OperationLog.storageCheck(getApplicationContext()); runOnUiThread(() -> { snapshot(); Toast.makeText(this, "Storage check passed", Toast.LENGTH_SHORT).show(); }); }
+            catch (Exception error) { runOnUiThread(() -> problem(error)); }
+        }, "storage-diagnostics").start();
     }
 
     private void snapshot() {
