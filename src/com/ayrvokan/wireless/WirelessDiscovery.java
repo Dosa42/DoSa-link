@@ -111,7 +111,7 @@ public final class WirelessDiscovery {
         change();
     }
 
-    private String key(NsdServiceInfo info) { return "mdns:" + info.getServiceType().replaceAll("\\.$", "") + ":" + info.getServiceName(); }
+    private String key(NsdServiceInfo info) { return WirelessBackend.lanKey(info.getServiceType(), info.getServiceName()); }
 
     private JSONObject service(NsdServiceInfo info, boolean resolved) throws Exception {
         JSONObject attrs = new JSONObject();
@@ -186,7 +186,7 @@ public final class WirelessDiscovery {
         info.setServiceName("Workshop-proof-" + backend.id);
         info.setServiceType("_workshop._tcp."); info.setPort(fixtureSocket.getLocalPort()); info.setAttribute("proof", backend.id);
         fixture = new NsdManager.RegistrationListener() {
-            public void onServiceRegistered(NsdServiceInfo registered) { perform(() -> { backend.state.put("fixture", service(registered, false)); backend.event("fixture", "Controlled LAN fixture registered", service(registered, false)); }); }
+            public void onServiceRegistered(NsdServiceInfo registered) { perform(() -> { JSONObject observed = service(info, false).put("name", registered.getServiceName()); backend.state.put("fixture", observed).put("fixtureRegistrationConfirmed", true); backend.event("fixture", "Controlled LAN fixture registered", observed); }); }
             public void onRegistrationFailed(NsdServiceInfo service, int code) { perform(() -> fail("fixture", "registration error " + code)); }
             public void onServiceUnregistered(NsdServiceInfo service) { }
             public void onUnregistrationFailed(NsdServiceInfo service, int code) { android.util.Log.w("WorkshopWireless", "Fixture unregister error " + code); }

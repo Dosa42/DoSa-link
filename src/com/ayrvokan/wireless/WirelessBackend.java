@@ -35,7 +35,11 @@ public final class WirelessBackend {
         String key = device.getString("key");
         boolean fresh = !devices.has(key);
         device.put("lastSeen", System.currentTimeMillis()).put("sessionId", id);
-        if (devices.has(key)) device.put("firstSeen", devices.getJSONObject(key).getLong("firstSeen"));
+        if (devices.has(key)) {
+            JSONObject previous = devices.getJSONObject(key);
+            device.put("firstSeen", previous.getLong("firstSeen"));
+            if (previous.optBoolean("resolved") && !device.optBoolean("resolved")) for (String field : new String[] {"resolved", "host", "port", "txtBase64"}) device.put(field, previous.get(field));
+        }
         else device.put("firstSeen", System.currentTimeMillis());
         devices.put(key, device);
         if (fresh) event("discovered", "Wireless device observed", device);
@@ -68,7 +72,23 @@ public final class WirelessBackend {
 
     public static JSONObject registry(Context context) throws Exception {
         File file = new File(context.getFilesDir(), "wireless-devices.json");
-        return file.isFile() ? new JSONObject(JadxJobs.read(file)) : new JSONObject().put("schema", "wireless-workshop.devices/1").put("devices", new JSONObject()).put("bindings", new JSONObject());
+        JSONObject registry = file.isFile() ? new JSONObject(JadxJobs.read(file)) : new JSONObject().put("schema", "wireless-workshop.devices/1").put("devices", new JSONObject()).put("bindings", new JSONObject());
+        JSONObject original = registry.getJSONObject("devices"); JSONObject normalized = new JSONObject(); JSONObject bindings = registry.getJSONObject("bindings");
+        java.util.Iterator<String> keys = original.keys();
+        while (keys.hasNext()) {
+            String old = keys.next(); JSONObject item = original.getJSONObject(old);
+            String key = item.optString("transport").equals("mdns") ? lanKey(item.optString("serviceType"), item.optString("name")) : old;
+            item.put("key", key);
+            if (!normalized.has(key) || item.optBoolean("resolved") || !normalized.getJSONObject(key).optBoolean("resolved")) normalized.put(key, item);
+            for (String profile : new String[] {"fanlamp", "nspanel"}) if (old.equals(bindings.optString(profile))) bindings.put(profile, key);
+        }
+        return registry.put("devices", normalized);
+    }
+
+    public static String lanKey(String type, String name) {
+        String value = type == null ? "" : type.toLowerCase(java.util.Locale.ROOT).replaceAll("^\\.+|\\.+$", "");
+        if (value.endsWith(".local")) value = value.substring(0, value.length() - 6);
+        return "mdns:" + value + ":" + name.toLowerCase(java.util.Locale.ROOT);
     }
 
     public static void bind(Context context, String key, String profile) throws Exception {
