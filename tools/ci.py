@@ -48,7 +48,7 @@ def prepare():
     shutil.copytree(ROOT / '.inputs/private', ROOT / 'private', dirs_exist_ok=True)
     editor = ROOT / 'toolchain/APKEditor-1.4.9.jar'
     editor.parent.mkdir(exist_ok=True)
-    fetch('https://github.com/REAndroid/APKEditor/releases/download/V1.4.9/APKEditor-1.4.9.jar', editor)
+    fetch('https://api.github.com/repos/REAndroid/APKEditor/releases/assets/424133344', editor, {'Accept': 'application/octet-stream'})
 
 def finish():
     output = ROOT / '.transfer/output'
