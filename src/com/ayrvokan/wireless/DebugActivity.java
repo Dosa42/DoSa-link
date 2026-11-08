@@ -108,20 +108,32 @@ public final class DebugActivity extends Activity {
         if (loading) return; loading = true;
         new Thread(() -> {
             try {
-                DebugJobs.recover(this); JSONArray jobs; try (WorkshopStore store = new WorkshopStore(this)) { jobs = store.jobs("debug"); }
-                if (selected.isEmpty() && jobs.length() > 0) selected = jobs.getJSONObject(0).getString("id");
-                String detail = "No session selected", text = "";
-                for (int i = 0; i < jobs.length(); i++) { JSONObject job = jobs.getJSONObject(i); if (job.getString("id").equals(selected)) detail = selected + "\n" + job.getString("state") + " • " + job.getString("detail"); }
+                File latest = new File(getFilesDir(), "debugger-state.json");
+                if (selected.isEmpty() && latest.isFile()) selected = new JSONObject(JadxJobs.read(latest)).optString("jobId");
+                boolean live = false; String detail = "No session selected", text = "";
                 if (!selected.isEmpty()) {
-                    File dir = DebugJobs.directory(this, selected); File file = new File(dir, "state.json"); if (file.isFile()) text = new JSONObject(JadxJobs.read(file)).toString(2);
-                    File failure = new File(dir, "failure.json"); if (failure.isFile()) text += "\n" + JadxJobs.read(failure);
-                    File report = new File(dir, "report.json"); if (report.isFile()) text += "\n" + JadxJobs.read(report);
+                    File dir = DebugJobs.directory(this, selected); File request = new File(dir, "request.json");
+                    File report = new File(dir, "report.json"), failure = new File(dir, "failure.json");
+                    live = request.isFile() && !report.isFile() && !failure.isFile();
+                    File file = new File(dir, "state.json");
+                    if (file.isFile()) { JSONObject state = new JSONObject(JadxJobs.read(file)); text = state.toString(2); detail = selected + "\n" + state.optString("phase"); }
+                    else detail = selected + "\nAttaching";
+                    if (failure.isFile()) { text += "\n" + JadxJobs.read(failure); detail = selected + "\nfailed"; }
+                    if (report.isFile()) { text += "\n" + JadxJobs.read(report); detail = selected + "\ncompleted"; }
                     File result = new File(dir, "probe-result.json"); if (result.isFile()) text += "\n" + JadxJobs.read(result);
                 }
+                File marker = new File(getFilesDir(), "debugger-live.json");
+                if (live && marker.isFile() && !DebugService.busy && !DebugJobs.live(this)) { DebugJobs.recover(this); live = false; }
+                JSONArray jobs = new JSONArray();
+                if (!live && !DebugService.busy && !DebugJobs.live(this)) {
+                    DebugJobs.recover(this);
+                    try (WorkshopStore store = new WorkshopStore(this)) { jobs = store.jobs("debug"); }
+                }
+                final JSONArray rows = jobs;
                 String shown = detail, snapshot = text;
                 runOnUiThread(() -> {
                     status.setText(shown); observed.setText(snapshot);
-                    if (!lastHistory.equals(jobs.toString())) { lastHistory = jobs.toString(); history.removeAllViews(); for (int i = 0; i < jobs.length(); i++) try { JSONObject job = jobs.getJSONObject(i); String id = job.getString("id"); button(history, job.getString("state") + " • " + job.getString("label"), () -> { selected = id; refresh(); }); } catch (Exception error) { status.setText(error.toString()); } }
+                    if (rows.length() > 0 && !lastHistory.equals(rows.toString())) { lastHistory = rows.toString(); history.removeAllViews(); for (int i = 0; i < rows.length(); i++) try { JSONObject job = rows.getJSONObject(i); String id = job.getString("id"); button(history, job.getString("state") + " • " + job.getString("label"), () -> { selected = id; refresh(); }); } catch (Exception error) { status.setText(error.toString()); } }
                 });
             } catch (Exception error) { runOnUiThread(() -> status.setText(error.toString())); }
             finally { loading = false; }

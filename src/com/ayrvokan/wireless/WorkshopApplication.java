@@ -42,8 +42,16 @@ public final class WorkshopApplication extends Application {
     private void probe(Context context, String id, String mode, boolean finish) {
         new Thread(() -> {
             try {
-                int result = "native".equals(mode) ? NativeDebug.nativeProbe() : DebugProbe.calculate(7, 9);
-                JSONObject value = new JSONObject().put("mode", mode).put("result", result).put("pid", android.os.Process.myPid()).put("thread", Thread.currentThread().getName());
+                int result;
+                try (WorkshopStore store = new WorkshopStore(context)) {
+                    android.database.sqlite.SQLiteDatabase database = store.getWritableDatabase(); database.beginTransaction();
+                    try {
+                        database.execSQL("UPDATE settings SET value=value WHERE name='workspace'");
+                        result = "native".equals(mode) ? NativeDebug.nativeProbe() : DebugProbe.calculate(7, 9);
+                        database.setTransactionSuccessful();
+                    } finally { database.endTransaction(); }
+                }
+                JSONObject value = new JSONObject().put("mode", mode).put("databaseWriteLockHeldAtBreakpoint", true).put("result", result).put("pid", android.os.Process.myPid()).put("thread", Thread.currentThread().getName());
                 if ("native".equals(mode)) value.put("native", new JSONObject(NativeDebug.nativeInfo()));
                 JadxJobs.write(new File(DebugJobs.directory(context, id), "probe-result.json"), value);
             } catch (Throwable error) {

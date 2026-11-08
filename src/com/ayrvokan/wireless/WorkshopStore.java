@@ -151,8 +151,12 @@ public final class WorkshopStore extends SQLiteOpenHelper {
     }
 
     public void trace(String level, String module, String phase, String session, String operation, String request, String device, String transport, String message, JSONObject payload, Long elapsed) {
+        traceAt(System.currentTimeMillis(), level, module, phase, session, operation, request, device, transport, message, payload, elapsed);
+    }
+
+    public void traceAt(long recordedAt, String level, String module, String phase, String session, String operation, String request, String device, String transport, String message, JSONObject payload, Long elapsed) {
         ContentValues values = new ContentValues();
-        values.put("recorded_at", System.currentTimeMillis());
+        values.put("recorded_at", recordedAt);
         values.put("kind", module);
         values.put("message", message);
         values.put("level", level); values.put("module", module); values.put("phase", phase);

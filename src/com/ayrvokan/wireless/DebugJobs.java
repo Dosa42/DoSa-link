@@ -20,7 +20,22 @@ public final class DebugJobs {
         return false;
     }
     static boolean active(String state) { return state.equals("queued") || state.equals("running") || state.equals("paused") || state.equals("stopping"); }
+    public static boolean live(Context context) throws Exception {
+        File marker = new File(context.getFilesDir(), "debugger-live.json");
+        if (!marker.isFile()) return false;
+        JSONObject value = new JSONObject(JadxJobs.read(marker)); int pid = value.getInt("pid");
+        try { return alive(context, pid) && TerminalJobs.ticks(pid).equals(value.getString("startTicks")); } catch (java.io.FileNotFoundException gone) { return false; }
+    }
     public static void awaitAvailable(Context context) throws Exception {
+        if (DebugService.busy) {
+            File marker = new File(context.getFilesDir(), "debugger-live.json");
+            if (marker.isFile()) {
+                JSONObject current = new JSONObject(JadxJobs.read(marker)); File dir = directory(context, current.getString("id"));
+                if (!new File(dir, "report.json").isFile() && !new File(dir, "failure.json").isFile()) throw new IllegalStateException("A debug session is already active");
+            }
+            while (DebugService.busy) Thread.sleep(25);
+        }
+        if (live(context)) throw new IllegalStateException("A debug session is already active");
         try (WorkshopStore store = new WorkshopStore(context)) {
             JSONArray jobs = store.jobs("debug");
             for (int i = 0; i < jobs.length(); i++) if (active(jobs.getJSONObject(i).getString("state"))) throw new IllegalStateException("A debug session is already active");
@@ -60,7 +75,32 @@ public final class DebugJobs {
     public static void action(Context context, String id, String action, JSONObject values) {
         context.startService(new Intent(context, DebugService.class).putExtra("id", id).putExtra("action", action).putExtra("values", values.toString()));
     }
+    public static void stopProbe(Context context, JSONObject request) throws Exception {
+        if (!request.optBoolean("fixture")) return;
+        int target = request.getInt("targetPid"); File file = new File(context.getFilesDir(), "debug-probe.json");
+        if (!file.isFile() || !alive(context, target)) return;
+        JSONObject identity = new JSONObject(JadxJobs.read(file));
+        if (identity.getInt("pid") != target || !identity.getString("startTicks").equals(request.getString("targetStartTicks"))) return;
+        context.stopService(new Intent(context, DebugProbeService.class));
+        while (new File("/proc/" + target).exists()) Thread.sleep(25);
+    }
     public static void recover(Context context) throws Exception {
+        if (live(context) || DebugService.busy) return;
+        File marker = new File(context.getFilesDir(), "debugger-live.json");
+        if (marker.isFile()) {
+            JSONObject value = new JSONObject(JadxJobs.read(marker)); String id = value.getString("id");
+            File dir = directory(context, id); JSONObject request = new JSONObject(JadxJobs.read(new File(dir, "request.json")));
+            if (request.getString("mode").equals("java") && alive(context, request.getInt("targetPid"))) send(context, id, request.getInt("targetPid"), "detach", new JSONObject());
+            File server = new File(dir, "server-process.json");
+            if (request.getString("mode").equals("native") && server.isFile()) {
+                JSONObject identity = new JSONObject(JadxJobs.read(server)); int pid = identity.getInt("pid");
+                try { if (TerminalJobs.ticks(pid).equals(identity.getString("startTicks"))) android.system.Os.kill(pid, android.system.OsConstants.SIGTERM); }
+                catch (java.io.FileNotFoundException ignored) { }
+                catch (android.system.ErrnoException error) { if (error.errno != android.system.OsConstants.ESRCH) throw error; }
+            }
+            stopProbe(context, request);
+            java.nio.file.Files.deleteIfExists(marker.toPath());
+        }
         try (WorkshopStore store = new WorkshopStore(context)) {
             JSONArray jobs = store.jobs("debug");
             for (int i = 0; i < jobs.length(); i++) {
@@ -77,10 +117,7 @@ public final class DebugJobs {
                     catch (java.io.FileNotFoundException ignored) { }
                     catch (android.system.ErrnoException error) { if (error.errno != android.system.OsConstants.ESRCH) throw error; }
                 }
-                if (request.optBoolean("fixture")) {
-                    context.stopService(new Intent(context, DebugProbeService.class));
-                    while (alive(context, request.getInt("targetPid"))) Thread.sleep(25);
-                }
+                stopProbe(context, request);
                 for (String name : new String[] {"request.json.part", "worker.json.part", "state.json.part", "report.json.part", "failure.json.part", "server.json.part"}) java.nio.file.Files.deleteIfExists(new File(dir, name).toPath());
                 File report = new File(dir, "report.json");
                 store.job("debug", job.getString("id"), job.getString("label"), report.isFile() ? new JSONObject(JadxJobs.read(report)).getString("status") : "interrupted", report.isFile() ? "Finished debug session recovered" : "Controller exited; debug session recovered");
