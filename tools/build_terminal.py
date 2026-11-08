@@ -24,11 +24,12 @@ def main():
     archive = WORK / 'mksh.tar.gz'
     with urllib.request.urlopen(config['url'], timeout=60) as source, archive.open('wb') as output:
         shutil.copyfileobj(source, output)
-    if digest(archive) != config['sha256']:
-        raise ValueError('mksh source archive hash mismatch')
     source = WORK / 'source'
     source.mkdir(exist_ok=True)
     with tarfile.open(archive) as tree:
+        records = {item.name: hashlib.sha256(tree.extractfile(item).read()).hexdigest() for item in tree.getmembers() if item.isfile()}
+        if any(not item.isfile() and not item.isdir() for item in tree.getmembers()) or hashlib.sha256(json.dumps(records, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != config['treeSha256']:
+            raise ValueError('Pinned mksh source tree hash mismatch')
         tree.extractall(source, filter='data')
     ndk = Path(os.environ['ANDROID_HOME']) / 'ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin'
     compiler = ndk / 'aarch64-linux-android26-clang'
