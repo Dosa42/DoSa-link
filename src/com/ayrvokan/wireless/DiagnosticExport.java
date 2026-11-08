@@ -21,6 +21,7 @@ public final class DiagnosticExport {
         Set<String> debuggers = new LinkedHashSet<>();
         Set<String> wireless = new LinkedHashSet<>();
         Set<String> compatibility = new LinkedHashSet<>();
+        Set<String> pairing = new LinkedHashSet<>();
         JSONArray files = new JSONArray();
         long count = 0;
         try (WorkshopStore store = new WorkshopStore(context); ZipOutputStream zip = new ZipOutputStream(destination)) {
@@ -39,6 +40,7 @@ public final class DiagnosticExport {
                         if (row.getString("module").equals("debug")) debuggers.add(operation);
                         if (row.getString("module").equals("wireless")) wireless.add(operation);
                         if (row.getString("module").equals("compatibility")) compatibility.add(operation);
+                        if (row.getString("module").equals("pairing")) pairing.add(operation);
                     }
                 }
             }
@@ -73,6 +75,10 @@ public final class DiagnosticExport {
             for (String id : compatibility) for (String name : new String[] {"state.json", "report.json"}) {
                 File file = new File(context.getFilesDir(), "compatibility-jobs/" + id + "/" + name);
                 if (file.isFile()) attach(zip, files, file, "jobs/compatibility/" + id + "/" + name);
+            }
+            for (String id : pairing) for (String name : new String[] {"state.json", "report.json"}) {
+                File file = new File(context.getFilesDir(), "pairing-jobs/" + id + "/" + name);
+                if (file.isFile()) attach(zip, files, file, "jobs/pairing/" + id + "/" + name);
             }
             manifest.put("eventCount", count).put("files", files).put("scope", "All matching events through maximumEventId; attached job logs and reports, excluding source/resource trees.");
             zip.putNextEntry(new ZipEntry("manifest.json")); zip.write(manifest.toString(2).getBytes(StandardCharsets.UTF_8)); zip.closeEntry();

@@ -82,9 +82,9 @@ def main():
         components = {name: len(application.findall(name)) for name in ['activity', 'service', 'receiver', 'provider']}
         if manifest.get('package') != 'com.ayrvokan.wireless' or application.get(NS + 'name') != 'com.ayrvokan.wireless.WorkshopApplication':
             raise ValueError('Unexpected private app identity/startup')
-        if components != {'activity': 8, 'service': 5, 'receiver': 0, 'provider': 0} or activities[0].get(NS + 'name') != 'com.ayrvokan.wireless.MainActivity':
+        if components != {'activity': 9, 'service': 5, 'receiver': 0, 'provider': 0} or activities[0].get(NS + 'name') != 'com.ayrvokan.wireless.MainActivity':
             raise ValueError('Unexpected startup components')
-        if {item.get(NS + 'name') for item in activities} != {'com.ayrvokan.wireless.MainActivity', 'com.ayrvokan.wireless.JadxActivity', 'com.ayrvokan.wireless.DiagnosticsActivity', 'com.ayrvokan.wireless.TerminalActivity', 'com.ayrvokan.wireless.FilesActivity', 'com.ayrvokan.wireless.DebugActivity', 'com.ayrvokan.wireless.WirelessActivity', 'com.ayrvokan.wireless.CompatibilityActivity'}:
+        if {item.get(NS + 'name') for item in activities} != {'com.ayrvokan.wireless.MainActivity', 'com.ayrvokan.wireless.JadxActivity', 'com.ayrvokan.wireless.DiagnosticsActivity', 'com.ayrvokan.wireless.TerminalActivity', 'com.ayrvokan.wireless.FilesActivity', 'com.ayrvokan.wireless.DebugActivity', 'com.ayrvokan.wireless.WirelessActivity', 'com.ayrvokan.wireless.CompatibilityActivity', 'com.ayrvokan.wireless.PairingActivity'}:
             raise ValueError('Unexpected activities')
         service = next(item for item in application.findall('service') if item.get(NS + 'name') == 'com.ayrvokan.wireless.JadxService')
         if service.get(NS + 'name') != 'com.ayrvokan.wireless.JadxService' or service.get(NS + 'process') != ':jadx' or service.get(NS + 'exported') != 'false':

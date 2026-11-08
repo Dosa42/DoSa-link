@@ -88,6 +88,7 @@ public final class WirelessActivity extends Activity {
                 String endpoint = item.optString("transport").equals("ble") ? item.optString("address") + " · RSSI " + item.optInt("rssi") : item.optString("host") + ":" + item.optInt("port");
                 text(devices, item.optString("name", key) + "\n" + item.optString("transport") + " · " + endpoint + "\nLast observed: " + new java.util.Date(item.optLong("lastSeen")), 16);
                 TextView detail = text(devices, item.toString(2), 12); detail.setTextIsSelectable(true);
+                if (item.optString("transport").equals("ble")) button(devices, "Connect or pair this device", () -> startActivity(new Intent(this, PairingActivity.class).putExtra("address", item.getString("address"))));
                 for (String profile : new String[] {"fanlamp", "nspanel"}) button(devices, (key.equals(bindings.optString(profile)) ? "Associated: " : "Associate with ") + profile, () -> { WirelessBackend.bind(this, key, profile); render(); });
             }
         });

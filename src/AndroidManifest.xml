@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.ayrvokan.wireless" android:versionCode="16" android:versionName="0.6.1">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.ayrvokan.wireless" android:versionCode="17" android:versionName="0.7.0">
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -23,6 +23,7 @@
         <activity android:name="com.ayrvokan.wireless.DebugActivity" android:process=":debugger" android:exported="true" android:windowSoftInputMode="adjustResize" />
         <activity android:name="com.ayrvokan.wireless.WirelessActivity" android:exported="true" android:windowSoftInputMode="adjustResize" />
         <activity android:name="com.ayrvokan.wireless.CompatibilityActivity" android:process=":compat" android:exported="true" />
+        <activity android:name="com.ayrvokan.wireless.PairingActivity" android:process=":pairing" android:exported="true" android:windowSoftInputMode="adjustResize" />
         <service android:name="com.ayrvokan.wireless.DebugService" android:exported="false" android:process=":debugger" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Interactive local Java and native app debugging" />
         </service>
