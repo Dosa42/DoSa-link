@@ -22,9 +22,8 @@ public final class DebugJobs {
     static boolean active(String state) { return state.equals("queued") || state.equals("running") || state.equals("paused") || state.equals("stopping"); }
     public static boolean live(Context context) throws Exception {
         File marker = new File(context.getFilesDir(), "debugger-live.json");
-        if (!marker.isFile()) return false;
-        JSONObject value = new JSONObject(JadxJobs.read(marker)); int pid = value.getInt("pid");
-        try { return alive(context, pid) && TerminalJobs.ticks(pid).equals(value.getString("startTicks")); } catch (java.io.FileNotFoundException gone) { return false; }
+        try { JSONObject value = new JSONObject(JadxJobs.read(marker)); return TerminalJobs.ticks(value.getInt("pid")).equals(value.getString("startTicks")); }
+        catch (java.io.FileNotFoundException gone) { return false; }
     }
     public static void awaitAvailable(Context context) throws Exception {
         if (DebugService.busy) {
@@ -84,7 +83,12 @@ public final class DebugJobs {
         context.stopService(new Intent(context, DebugProbeService.class));
         while (new File("/proc/" + target).exists()) Thread.sleep(25);
     }
-    public static void recover(Context context) throws Exception {
+    public static synchronized void recover(Context context) throws Exception {
+        if (live(context) || DebugService.busy) return;
+        File root = new File(context.getFilesDir(), "debug-jobs"); root.mkdirs();
+        try (java.io.RandomAccessFile file = new java.io.RandomAccessFile(new File(root, ".recovery-lock"), "rw"); java.nio.channels.FileLock lock = file.getChannel().lock()) { recoverLocked(context); }
+    }
+    private static void recoverLocked(Context context) throws Exception {
         if (live(context) || DebugService.busy) return;
         File marker = new File(context.getFilesDir(), "debugger-live.json");
         if (marker.isFile()) {
