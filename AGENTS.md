@@ -2,6 +2,8 @@
 
 Build APKs, native components and Gradle outputs only through Dosa42/DoSa-link GitHub Actions. Keep one current APK in dist. Reuse the existing JADX engine cache and completed analysis results.
 
+Download passed builds with tools/download_artifact.py. It reuses existing bytes, transfers exact HTTP ranges concurrently and validates the final APK against the remote SHA256 before replacing dist.
+
 Before publishing, consolidate the source, manifest, packaging assertions and export integration for the requested feature. Run tools/preflight.py locally for source checks; Android compilation runs in CI before packaging. Record the concrete reason for each additional APK build. Do not publish intermediary edits that are still being reviewed together.
 
 Prepare a focused on-device verifier while CI runs. Exercise the feature's success path, relevant permission/error path and lifecycle cleanup. After a failure, rerun that failed check first; repeat passing checks only when a subsequent change affects them. Use a small tool regression when shared startup or persistence changes; do not re-decompile the original eWeLink APK for unrelated features.

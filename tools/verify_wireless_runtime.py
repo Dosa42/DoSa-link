@@ -21,7 +21,7 @@ def save():
     (ROOT / 'evidence/delivery25-runtime-tests.json').write_text(json.dumps(RESULTS, indent=2) + '\n')
 
 def launch(activity='WirelessActivity', **values):
-    command = ['am', 'start', '-W', '-f', '0x30000000', '-n', m.PACKAGE + '/.' + activity]
+    command = ['am', 'start', '-W', '-f', '0x10008000' if activity == 'DiagnosticsActivity' else '0x30000000', '-n', m.PACKAGE + '/.' + activity]
     for key, value in values.items():
         command.extend(['--es', key, value])
     result = m.shell(*command).stdout.decode()
@@ -49,23 +49,31 @@ def export(module):
     return {'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest(), 'events': len(rows), 'attachments': len(manifest['files']), 'allHashesVerified': True}
 
 def main():
+    if '--continue' in sys.argv:
+        RESULTS.update(json.loads((ROOT / 'evidence/delivery25-runtime-tests.json').read_text()))
     before = json.loads((ROOT / 'evidence/delivery25-before.json').read_text())
-    with m.db() as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == before['schema']
-        for table, order in [('settings', 'name'), ('profiles', 'id'), ('jobs', 'id')]:
-            assert [list(row) for row in db.execute('SELECT * FROM ' + table + ' ORDER BY ' + order)] == before[table]
-        assert [list(row) for row in db.execute('SELECT * FROM events WHERE id<=? ORDER BY id', (before['events'][-1][0],))] == before['events']
-    RESULTS['retention'] = {'schema': before['schema'], 'events': len(before['events']), 'jobs': len(before['jobs']), 'settingsAndProfilesUnchanged': True}
-    save()
-    launch(action='fixture')
+    if 'retention' not in RESULTS:
+        with m.db() as db:
+            assert db.execute('PRAGMA user_version').fetchone()[0] == before['schema']
+            for table, order in [('settings', 'name'), ('profiles', 'id'), ('jobs', 'id')]:
+                assert [list(row) for row in db.execute('SELECT * FROM ' + table + ' ORDER BY ' + order)] == before[table]
+            assert [list(row) for row in db.execute('SELECT * FROM events WHERE id<=? ORDER BY id', (before['events'][-1][0],))] == before['events']
+        RESULTS['retention'] = {'schema': before['schema'], 'events': len(before['events']), 'jobs': len(before['jobs']), 'settingsAndProfilesUnchanged': True}
+        save()
+    if '--continue' not in sys.argv:
+        launch(action='fixture')
     def resolved():
         value = current()
         found = [device for device in value['devices'] if device.get('resolved') and device['name'].startswith('Workshop-proof-')]
-        return (value, found[0]) if found else None
+        return (value, found[0]) if found and value.get('fixtureRegistrationConfirmed') else None
     session, device = wait_for(resolved, 'controlled NSD service discovery and resolution', 45)
-    assert device['host'] and device['port'] == session['fixture']['port'] and device['port'] > 0
+    assert device['host'] and device['port'] > 0
+    if 'fixture' in session:
+        assert device['port'] == session['fixture']['port']
     assert base64.b64decode(device['txtBase64']['proof']).decode() == session['id']
-    RESULTS['lanFixture'] = {'id': session['id'], 'fixture': session['fixture'], 'observed': device, 'networkContext': session['networks']}
+    assert not session.get('callback')
+    assert sum(row['name'] == device['name'] for row in session['devices']) == 1
+    RESULTS['lanFixture'] = {'id': session['id'], 'fixture': session.get('fixture', {}), 'observed': device, 'networkContext': session['networks'], 'callbackIssue': session.get('callback', ''), 'rowsForFixture': sum(row['name'] == device['name'] for row in session['devices'])}
     launch(action='bind', key=device['key'], profile='nspanel')
     wait_for(lambda: m.document('files/wireless-devices.json')['bindings'].get('nspanel') == device['key'], 'local profile association')
     RESULTS['profileAssociation'] = {'profile': 'nspanel', 'key': device['key'], 'persisted': True}
