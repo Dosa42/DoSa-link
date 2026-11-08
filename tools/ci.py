@@ -6,20 +6,34 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import time
+import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 
-def fetch(url, target):
-    with urllib.request.urlopen(url) as response, target.open('wb') as output:
-        shutil.copyfileobj(response, output, 1048576)
+def fetch(url, target, headers=None):
+    part = target.with_name(target.name + '.part')
+    for attempt in range(3):
+        try:
+            request = urllib.request.Request(url, headers=headers or {})
+            with urllib.request.urlopen(request, timeout=30) as response, part.open('wb') as output:
+                shutil.copyfileobj(response, output, 1048576)
+            part.replace(target)
+            return
+        except (urllib.error.URLError, OSError) as error:
+            part.unlink(missing_ok=True)
+            if attempt == 2 or getattr(error, 'code', 500) not in [408, 429, 500, 502, 503, 504]:
+                raise
+            print(json.dumps({'fetch': 'retry', 'attempt': attempt + 2, 'errorType': type(error).__name__}), flush=True)
+            time.sleep(2 ** attempt)
 
 def prepare():
     config = json.loads((ROOT / 'ci-inputs.json').read_text())
     transfer = ROOT / '.transfer'
     transfer.mkdir(exist_ok=True)
     encrypted = transfer / 'inputs.enc'
-    fetch(config['url'], encrypted)
+    fetch(config.get('api_url', config['url']), encrypted, {'Accept': 'application/octet-stream'})
     with encrypted.open('rb') as source:
         actual = hashlib.file_digest(source, 'sha256').hexdigest()
     if actual != config['sha256']:
