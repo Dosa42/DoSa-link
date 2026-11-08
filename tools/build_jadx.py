@@ -27,6 +27,8 @@ def main():
         if cached.get('sourceFingerprint') == fingerprint and all((seed / name).is_file() and digest(seed / name) == expected for name, expected in cached['files'].items()):
             shutil.copyfile(seed / 'dependencies.json', ROOT / 'evidence/jadx-dependencies.json')
             shutil.copyfile(receipt, ROOT / 'evidence/jadx-package.json')
+            for name in ['jadx-jvm-fixture.json', 'jadx-jvm-multi-fixture.json', 'jadx-jvm-batch-fixture.json']:
+                shutil.copyfile(seed / name, ROOT / 'evidence' / name)
             print(json.dumps({'stage': 'reuse-unchanged-jni-jadx-engine', 'fingerprint': fingerprint}), flush=True)
             return
     if seed.exists():
@@ -95,6 +97,31 @@ def main():
     if 'Nested' not in base_source or 'StageBase<String>' not in child_source or 'cross-DEX type context' not in child_source:
         raise ValueError('Cross-DEX generic types or inner-class output differs from fixture')
     shutil.copyfile(multi_output / 'engine-report.json', ROOT / 'evidence/jadx-jvm-multi-fixture.json')
+    batch_source = WORK / 'BatchFixture.java'
+    batch_source.write_text('package com.ayrvokan.batches;\n' + '\n'.join('final class Batch%04d { int value() { return %d; } }' % (i, i) for i in range(520)) + '\nfinal class BatchOuter {\n' + '\n'.join('static final class Nested%d { int value() { return %d; } }' % (i, i) for i in range(16)) + '\n}\n')
+    batch_classes = WORK / 'batch-fixture-classes'
+    batch_classes.mkdir(exist_ok=True)
+    run('compile-batch-fixture-classes', ['javac', '--release', '8', '-d', batch_classes, batch_source])
+    batch_dex = WORK / 'batch-fixture-dex'
+    batch_dex.mkdir(exist_ok=True)
+    run('compile-batch-fixture-dex', [d8, '--min-api', '26', '--lib', android, '--output', batch_dex, *sorted(batch_classes.rglob('*.class'))])
+    batch_apk = WORK / 'batch-fixture.apk'
+    with zipfile.ZipFile(fixture) as original, zipfile.ZipFile(batch_apk, 'w') as output:
+        for member in original.infolist():
+            if not member.filename.endswith('.dex'):
+                output.writestr(member, original.read(member))
+        output.write(batch_dex / 'classes.dex', 'classes.dex')
+    batch_output = WORK / 'jvm-batch-fixture-result'
+    test_request.write_text(json.dumps({'input': str(batch_apk), 'options': [], 'selectedClass': ''}))
+    run('verify-complete-family-batch-coverage', ['java', '-classpath', classpath, 'com.ayrvokan.jadxengine.Runner', test_request, batch_output, test_progress])
+    batch_report = json.loads((batch_output / 'engine-report.json').read_text())
+    if batch_report['errors'] or batch_report['inputClassDefinitions'] != 537 or len(batch_report['stages']) != 2 or sum(stage['classDefinitionsVisited'] for stage in batch_report['stages']) != 537:
+        raise ValueError('Source-family batch boundaries lost input coverage')
+    if (batch_output / 'sources/com/ayrvokan/batches/BatchOuter.java').read_text().count('class Nested') != 16:
+        raise ValueError('A source batch split or lost an inner-class family')
+    shutil.copyfile(batch_output / 'engine-report.json', ROOT / 'evidence/jadx-jvm-batch-fixture.json')
+    for name in ['jadx-jvm-fixture.json', 'jadx-jvm-multi-fixture.json', 'jadx-jvm-batch-fixture.json']:
+        shutil.copyfile(ROOT / 'evidence' / name, seed / name)
     runtime = json.loads((ROOT / 'native/runtime.json').read_text())
     source = WORK / 'android-jre.tar.xz'
     if not source.exists() or digest(source) != runtime['sha256']:

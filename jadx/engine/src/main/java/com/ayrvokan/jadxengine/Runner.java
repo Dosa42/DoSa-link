@@ -115,7 +115,7 @@ public final class Runner {
             report.put("runtimeBackend", Boolean.getBoolean("workshop.jni") ? "jni-hotspot" : "host-jvm");
             report.put("vmArguments", new JSONArray(java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments()));
             boolean stagedApk = args.getInputFiles().size() == 1 && args.getInputFiles().get(0).getName().toLowerCase(java.util.Locale.ROOT).endsWith(".apk");
-            report.put("staging", stagedApk ? "per-unit-load/compact-signature-index" : "shared-analysis-context/ordered-dex-output");
+            report.put("staging", stagedApk ? "per-family-batch-load/compact-signature-index" : "shared-analysis-context/ordered-dex-output");
             report.put("metadataLoadCount", stagedApk ? JSONObject.NULL : 1);
             if (!stagedApk) report.put("crossDexContextPreserved", true);
             File progress = new File(progressPath);

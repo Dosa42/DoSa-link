@@ -44,6 +44,7 @@ final class StagedApk {
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(StagedApk.class);
+    private static final int SOURCE_BATCH_CLASS_TARGET = 512;
 
     private static final class Unit {
         final String origin;
@@ -51,7 +52,8 @@ final class StagedApk {
         final boolean dex;
         final Set<String> names = new LinkedHashSet<>();
         final Set<String> owned = new LinkedHashSet<>();
-        Unit(String origin, File input, boolean dex) { this.origin = origin; this.input = input; this.dex = dex; }
+        String stageName;
+        Unit(String origin, File input, boolean dex) { this.origin = origin; this.input = input; this.dex = dex; this.stageName = origin; }
     }
 
     private static final class Index {
@@ -156,6 +158,31 @@ final class StagedApk {
         return current;
     }
 
+    private static List<Unit> sourceUnits(List<Unit> inputs, Index index) {
+        List<Unit> result = new ArrayList<>();
+        for (Unit input : inputs) {
+            if (!input.dex) { result.add(input); continue; }
+            Map<String, List<String>> families = new java.util.TreeMap<>();
+            for (String name : input.owned) families.computeIfAbsent(family(name, index), key -> new ArrayList<>()).add(name);
+            List<Unit> batches = new ArrayList<>();
+            Unit batch = null;
+            for (List<String> members : families.values()) {
+                if (batch == null || !batch.owned.isEmpty() && batch.owned.size() + members.size() > SOURCE_BATCH_CLASS_TARGET) {
+                    batch = new Unit(input.origin, input.input, true);
+                    batches.add(batch);
+                }
+                batch.owned.addAll(members);
+                batch.names.addAll(members);
+            }
+            for (int part = 0; part < batches.size(); part++) {
+                Unit unit = batches.get(part);
+                unit.stageName = input.origin + " [" + (part + 1) + "/" + batches.size() + "]";
+                result.add(unit);
+            }
+        }
+        return result;
+    }
+
     @SuppressWarnings("unchecked")
     private static int importSignatures(JadxDecompiler jadx, Index primary, Index fallback) throws Exception {
         Field field = ClspGraph.class.getDeclaredField("nameMap");
@@ -230,7 +257,7 @@ final class StagedApk {
             tasks.addParallelTasks(work);
             tasks.execute();
             while (tasks.isRunning()) {
-                Runner.write(progress, new JSONObject().put("phase", "Sources " + stage + "/" + count + ": " + unit.origin).put("stage", stage).put("stages", count).put("completed", tasks.getProgress()).put("total", tasks.getTasksCount()));
+                Runner.write(progress, new JSONObject().put("phase", "Sources " + stage + "/" + count + ": " + unit.stageName).put("stage", stage).put("stages", count).put("completed", tasks.getProgress()).put("total", tasks.getTasksCount()));
                 Thread.sleep(1000);
             }
             tasks.awaitTermination();
@@ -238,7 +265,7 @@ final class StagedApk {
             errors = jadx.getErrorsCount() + failures.get();
             warnings = jadx.getWarnsCount();
         }
-        return new JSONObject().put("input", unit.origin).put("kind", unit.dex ? "dex" : "embedded-jar").put("inputClassDefinitions", unit.names.size()).put("ownedClassDefinitions", unit.dex ? unit.owned.size() : unit.names.size()).put("classDefinitionsVisited", unit.dex ? visited.get() : unit.names.size()).put("topLevelClassesLoaded", loaded).put("signatureIndexEntries", imports).put("classesExported", saved.get()).put("errors", errors).put("warnings", warnings).put("elapsedMillis", System.currentTimeMillis() - started);
+        return new JSONObject().put("input", unit.origin).put("sourceBatch", unit.stageName).put("kind", unit.dex ? "dex" : "embedded-jar").put("inputClassDefinitions", unit.names.size()).put("ownedClassDefinitions", unit.dex ? unit.owned.size() : unit.names.size()).put("classDefinitionsVisited", unit.dex ? visited.get() : unit.names.size()).put("topLevelClassesLoaded", loaded).put("signatureIndexEntries", imports).put("classesExported", saved.get()).put("errors", errors).put("warnings", warnings).put("elapsedMillis", System.currentTimeMillis() - started);
     }
 
     static JSONObject run(JadxArgs base, ArgsFactory factory, File progress) throws Exception {
@@ -284,30 +311,34 @@ final class StagedApk {
             }
             System.gc();
         }
-        List<Path> dexFiles = new ArrayList<>();
-        for (Unit unit : units) if (unit.dex) dexFiles.add(unit.input.toPath());
+        List<Unit> sourceUnits = sourceUnits(units, dex);
         JSONArray stages = new JSONArray();
         Set<String> exported = new HashSet<>();
         int stage = 0;
         int topLevel = 0;
         int generated = 0;
-        if (!base.isSkipSources()) for (Unit unit : units) {
+        int visitedDexDefinitions = 0;
+        if (!base.isSkipSources()) for (Unit unit : sourceUnits) {
             stage++;
             if (unit.dex && unit.owned.isEmpty()) continue;
-            JSONObject result = sources(unit, dexFiles, unit.dex ? dex : jars, unit.dex ? jars : dex, metadata, output, progress, factory, exported, stage, units.size());
+            Set<Path> activeDexFiles = new LinkedHashSet<>();
+            if (unit.dex) for (String name : unit.owned) activeDexFiles.add(dex.origins.get(name).input.toPath());
+            JSONObject result = sources(unit, new ArrayList<>(activeDexFiles), unit.dex ? dex : jars, unit.dex ? jars : dex, metadata, output, progress, factory, exported, stage, sourceUnits.size());
             stages.put(result);
             topLevel += result.getInt("topLevelClassesLoaded");
             generated += result.getInt("classesExported");
+            if (unit.dex) visitedDexDefinitions += result.getInt("classDefinitionsVisited");
             errors += result.getInt("errors");
             warnings += result.getInt("warnings");
             System.gc();
             result.put("heapUsedAfterRelease", Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory());
             Runner.write(new File(output, "stages-progress.json"), new JSONObject().put("completedStages", stages));
         }
+        if (!base.isSkipSources() && visitedDexDefinitions != dex.origins.size()) throw new IllegalStateException("Incomplete DEX coverage: " + visitedDexDefinitions + "/" + dex.origins.size());
         long resources;
         if (new File(output, "resources").isDirectory()) {
             try (java.util.stream.Stream<Path> files = Files.walk(new File(output, "resources").toPath())) { resources = files.filter(Files::isRegularFile).count(); }
         } else resources = 0;
-        return new JSONObject().put("classes", topLevel).put("classesMeaning", "top-level classes loaded across source units").put("inputClassDefinitions", dex.origins.size() + jars.origins.size()).put("resources", resources).put("stages", stages).put("headerStages", headerStages).put("exportedClasses", generated).put("errors", errors).put("warnings", warnings).put("metadataLoadCount", units.size()).put("staging", "per-unit-load/compact-signature-index").put("signatureIndexEntries", dex.types.size() + jars.types.size()).put("crossDexTypeSupport", "sibling signatures and parents; bytecode graphs stay within the active unit").put("crossDexFamilyRelocations", relocated).put("classpathAdapter", "jadx-1.5.6/ClspGraph.nameMap").put("completedStageStateReleased", true).put("stagingLimits", new JSONArray().put("Cross-unit method bodies are not retained together; whole-program inlining and transformations can differ from monolithic JADX."));
+        return new JSONObject().put("classes", topLevel).put("classesMeaning", "top-level classes loaded across source units").put("inputClassDefinitions", dex.origins.size() + jars.origins.size()).put("resources", resources).put("stages", stages).put("headerStages", headerStages).put("exportedClasses", generated).put("errors", errors).put("warnings", warnings).put("metadataLoadCount", units.size()).put("staging", "per-family-batch-load/compact-signature-index").put("sourceBatchClassTarget", SOURCE_BATCH_CLASS_TARGET).put("sourceBatchCount", sourceUnits.size()).put("visitedDexClassDefinitions", visitedDexDefinitions).put("allDexDefinitionsVisited", !base.isSkipSources() && visitedDexDefinitions == dex.origins.size()).put("sourceBatchTargetSemantics", "Planning size only; complete class families can exceed it and every class remains scheduled.").put("signatureIndexEntries", dex.types.size() + jars.types.size()).put("crossDexTypeSupport", "sibling signatures and parents; bytecode graphs stay within the active unit").put("crossDexFamilyRelocations", relocated).put("classpathAdapter", "jadx-1.5.6/ClspGraph.nameMap").put("completedStageStateReleased", true).put("stagingLimits", new JSONArray().put("Cross-unit method bodies are not retained together; whole-program inlining and transformations can differ from monolithic JADX."));
     }
 }

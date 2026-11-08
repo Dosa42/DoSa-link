@@ -74,7 +74,7 @@ public final class JadxJobs {
         if (files == null) return;
         for (File file : files) {
             String name = file.getName();
-            if (file.isFile() && (name.equals("console.log") || name.equals("jadx.log") || name.equals("native-jvm.log") || name.equals("runtime-start.json") || name.startsWith("hs_err_pid"))) {
+            if (file.isFile() && (name.equals("console.log") || name.equals("jadx.log") || name.equals("native-jvm.log") || name.equals("runtime-start.json") || name.equals("staged-inputs.json") || name.equals("stages-progress.json") || name.startsWith("hs_err_pid"))) {
                 java.nio.file.Files.copy(file.toPath(), new File(dir, name).toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
         }

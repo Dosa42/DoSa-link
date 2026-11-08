@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.ayrvokan.wireless" android:versionCode="4" android:versionName="0.2.3">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.ayrvokan.wireless" android:versionCode="5" android:versionName="0.2.4">
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
