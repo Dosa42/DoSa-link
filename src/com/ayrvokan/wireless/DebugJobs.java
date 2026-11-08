@@ -120,6 +120,7 @@ public final class DebugJobs {
                 stopProbe(context, request);
                 for (String name : new String[] {"request.json.part", "worker.json.part", "state.json.part", "report.json.part", "failure.json.part", "server.json.part"}) java.nio.file.Files.deleteIfExists(new File(dir, name).toPath());
                 File report = new File(dir, "report.json");
+                if (!report.isFile()) JadxJobs.write(report, new JSONObject().put("status", "interrupted").put("mode", request.getString("mode")).put("targetPid", request.getInt("targetPid")).put("recoveredUtc", java.time.Instant.now().toString()).put("lastSnapshotRetained", true));
                 store.job("debug", job.getString("id"), job.getString("label"), report.isFile() ? new JSONObject(JadxJobs.read(report)).getString("status") : "interrupted", report.isFile() ? "Finished debug session recovered" : "Controller exited; debug session recovered");
             }
         }

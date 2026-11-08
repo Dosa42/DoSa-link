@@ -119,7 +119,7 @@ public final class DebugActivity extends Activity {
                     if (file.isFile()) { JSONObject state = new JSONObject(JadxJobs.read(file)); text = state.toString(2); detail = selected + "\n" + state.optString("phase"); }
                     else detail = selected + "\nAttaching";
                     if (failure.isFile()) { text += "\n" + JadxJobs.read(failure); detail = selected + "\nfailed"; }
-                    if (report.isFile()) { text += "\n" + JadxJobs.read(report); detail = selected + "\ncompleted"; }
+                    if (report.isFile()) { text += "\n" + JadxJobs.read(report); detail = selected + "\n" + new JSONObject(JadxJobs.read(report)).optString("status"); }
                     File result = new File(dir, "probe-result.json"); if (result.isFile()) text += "\n" + JadxJobs.read(result);
                 }
                 File marker = new File(getFilesDir(), "debugger-live.json");
