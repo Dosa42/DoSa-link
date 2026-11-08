@@ -75,6 +75,7 @@ public final class DebugActivity extends Activity {
         if (entries != null) for (ActivityManager.RunningAppProcessInfo p : entries) if (p.uid == android.os.Process.myUid() && p.processName.startsWith(getPackageName()) && p.pid != android.os.Process.myPid()) button(processes, p.pid + " • " + p.processName, () -> pid.setText(Integer.toString(p.pid)));
     }
     private void proof(String backend) throws Exception {
+        DebugJobs.recover(this); DebugJobs.awaitAvailable(this);
         String token = java.util.UUID.randomUUID().toString();
         startForegroundService(new Intent(this, DebugProbeService.class).putExtra("token", token));
         long started = android.os.SystemClock.elapsedRealtime();

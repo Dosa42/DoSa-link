@@ -11,7 +11,7 @@ public final class NativeDebug {
     public static synchronized void attach(Context context) throws Exception {
         if (attached) return;
         if (Build.VERSION.SDK_INT < 28) throw new UnsupportedOperationException("In-app ART agent attachment requires Android9/API28 or newer");
-        android.os.Debug.attachJvmtiAgent(new File(context.getApplicationInfo().nativeLibraryDir, "libworkshop_debug.so").getPath(), "", NativeDebug.class.getClassLoader());
+        android.os.Debug.attachJvmtiAgent("libworkshop_debug.so", null, NativeDebug.class.getClassLoader());
         attached = true;
     }
     public static JSONObject arm(Context context, JSONObject request, File directory) throws Exception {

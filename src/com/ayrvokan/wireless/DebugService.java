@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 import org.json.JSONObject;
 
 public final class DebugService extends Service {
+    public static volatile boolean busy;
     private String active;
     private volatile NativeDebugger nativeDebugger;
     private final LinkedBlockingQueue<JSONObject> commands = new LinkedBlockingQueue<>();
@@ -32,7 +33,7 @@ public final class DebugService extends Service {
             return START_NOT_STICKY;
         }
         if (active != null) return START_NOT_STICKY;
-        active = id;
+        active = id; busy = true;
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         manager.createNotificationChannel(new NotificationChannel("debug-jobs", "Debugger sessions", NotificationManager.IMPORTANCE_LOW));
         PendingIntent open = PendingIntent.getActivity(this, 24, new Intent(this, DebugActivity.class), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
@@ -113,9 +114,13 @@ public final class DebugService extends Service {
             }
         } catch (Exception error) { android.util.Log.e("WorkshopDebug", "Debug finalization failed", error); }
         finally {
-            if (request != null && request.optBoolean("fixture")) stopService(new Intent(this, DebugProbeService.class));
+            if (request != null && request.optBoolean("fixture")) {
+                stopService(new Intent(this, DebugProbeService.class));
+                int target = request.optInt("targetPid", -1);
+                while (DebugJobs.alive(this, target)) try { Thread.sleep(25); } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); break; }
+            }
             for (String name : new String[] {"request.json.part", "worker.json.part", "state.json.part", "report.json.part", "failure.json.part"}) new File(dir, name).delete();
-            active = null; commands.clear(); stopForeground(STOP_FOREGROUND_REMOVE); stopSelf();
+            active = null; commands.clear(); stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); busy = false;
         }
     }
 

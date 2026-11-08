@@ -20,8 +20,16 @@ public final class DebugJobs {
         return false;
     }
     static boolean active(String state) { return state.equals("queued") || state.equals("running") || state.equals("paused") || state.equals("stopping"); }
+    public static void awaitAvailable(Context context) throws Exception {
+        try (WorkshopStore store = new WorkshopStore(context)) {
+            JSONArray jobs = store.jobs("debug");
+            for (int i = 0; i < jobs.length(); i++) if (active(jobs.getJSONObject(i).getString("state"))) throw new IllegalStateException("A debug session is already active");
+        }
+        while (DebugService.busy) Thread.sleep(25);
+    }
     public static String start(Context context, JSONObject request) throws Exception {
         recover(context);
+        awaitAvailable(context);
         int pid = request.getInt("targetPid");
         if (!alive(context, pid)) throw new IllegalStateException("Choose a running process of this app");
         if (pid == android.os.Process.myPid()) throw new IllegalArgumentException("The debugger controller must run separately from its target");
@@ -69,7 +77,10 @@ public final class DebugJobs {
                     catch (java.io.FileNotFoundException ignored) { }
                     catch (android.system.ErrnoException error) { if (error.errno != android.system.OsConstants.ESRCH) throw error; }
                 }
-                if (request.optBoolean("fixture")) context.stopService(new Intent(context, DebugProbeService.class));
+                if (request.optBoolean("fixture")) {
+                    context.stopService(new Intent(context, DebugProbeService.class));
+                    while (alive(context, request.getInt("targetPid"))) Thread.sleep(25);
+                }
                 for (String name : new String[] {"request.json.part", "worker.json.part", "state.json.part", "report.json.part", "failure.json.part", "server.json.part"}) java.nio.file.Files.deleteIfExists(new File(dir, name).toPath());
                 File report = new File(dir, "report.json");
                 store.job("debug", job.getString("id"), job.getString("label"), report.isFile() ? new JSONObject(JadxJobs.read(report)).getString("status") : "interrupted", report.isFile() ? "Finished debug session recovered" : "Controller exited; debug session recovered");
