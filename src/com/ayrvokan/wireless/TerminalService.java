@@ -117,7 +117,7 @@ public final class TerminalService extends Service {
         } catch (Exception error) { android.util.Log.e("WorkshopTerminal", "Finalization failed", error); }
         finally {
             File[] files = dir.listFiles();
-            if (files != null) for (File file : files) if (file.getName().endsWith(".part")) file.delete();
+            if (files != null) for (File file : files) if (java.util.Arrays.asList("request.json.part", "worker.json.part", "process.json.part", "report.json.part", "failure.json.part").contains(file.getName())) file.delete();
             process = null;
             stopForeground(STOP_FOREGROUND_REMOVE); stopSelf();
             android.os.Process.killProcess(android.os.Process.myPid());

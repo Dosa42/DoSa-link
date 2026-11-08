@@ -33,7 +33,7 @@ def main():
         tree.extractall(source, filter='data')
     ndk = Path(os.environ['ANDROID_HOME']) / 'ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin'
     compiler = ndk / 'aarch64-linux-android26-clang'
-    environment = dict(os.environ, TARGET_OS='Android', CC=str(compiler), CFLAGS='-O2 -fPIE -fno-strict-aliasing -fwrapv', LDFLAGS='-pie -Wl,-z,max-page-size=16384', CPPFLAGS='-DMKSH_DEFAULT_TMPDIR="/data/local/tmp"')
+    environment = dict(os.environ, TARGET_OS='Android', CC=str(compiler), CFLAGS='-O2 -fPIE -fno-strict-aliasing -fwrapv', LDFLAGS='-pie -Wl,-z,max-page-size=16384', CPPFLAGS='-DMKSH_ASSUME_UTF8')
     with (ROOT / 'evidence/terminal-build.log').open('w') as log:
         subprocess.run(['sh', 'Build.sh', '-r'], cwd=source / 'src', env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
         subprocess.run([str(compiler), '-O2', '-fPIE', '-pie', '-Wall', '-Wextra', '-Werror', '-Wl,-z,max-page-size=16384', str(ROOT / 'terminal/launcher.c'), '-o', str(SEED / 'libworkshop_terminal.so')], stdout=log, stderr=subprocess.STDOUT, check=True)

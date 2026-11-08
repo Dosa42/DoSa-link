@@ -66,7 +66,7 @@ public final class TerminalJobs {
                 if (worker.isFile() && workerAlive(context, new JSONObject(JadxJobs.read(worker)).getInt("pid"))) continue;
                 kill(dir);
                 File[] files = dir.listFiles();
-                if (files != null) for (File file : files) if (file.getName().endsWith(".part")) Files.deleteIfExists(file.toPath());
+                if (files != null) for (File file : files) if (java.util.Arrays.asList("request.json.part", "worker.json.part", "process.json.part", "report.json.part", "failure.json.part").contains(file.getName())) Files.deleteIfExists(file.toPath());
                 File report = new File(dir, "report.json");
                 String state = report.isFile() ? new JSONObject(JadxJobs.read(report)).getString("status") : job.getString("state").equals("stopping") ? "stopped" : "interrupted";
                 store.job("terminal", job.getString("id"), job.getString("label"), state, report.isFile() ? "Finished command recovered" : "Worker exited; command logs retained");

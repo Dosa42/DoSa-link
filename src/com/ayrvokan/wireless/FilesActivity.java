@@ -48,6 +48,7 @@ public final class FilesActivity extends Activity {
         status = text(body, "", 14);
         if (state != null) pending = state.getString("pending", "");
         if ("check".equals(getIntent().getStringExtra("action"))) work(() -> JadxJobs.write(new File(getFilesDir(), "files-check.json"), WorkshopFiles.check(this)));
+        work(() -> WorkshopFiles.recover(this));
         browse();
     }
 
@@ -98,8 +99,8 @@ public final class FilesActivity extends Activity {
         if ((request != 31 && request != 32) || result != RESULT_OK || data == null || data.getData() == null) return;
         File selected = new File(pending); Uri uri = data.getData();
         work(() -> {
-            try { JSONObject done = WorkshopFiles.perform(this, request == 31 ? "import" : "export", selected, request == 31 ? selected : null, null, uri); runOnUiThread(() -> { status.setText(done.toString()); browse(); }); }
-            catch (Exception error) { if (request == 32) try { android.provider.DocumentsContract.deleteDocument(getContentResolver(), uri); } catch (Exception cleanup) { error.addSuppressed(cleanup); } throw error; }
+            JSONObject done = WorkshopFiles.perform(this, request == 31 ? "import" : "export", selected, request == 31 ? selected : null, null, uri);
+            runOnUiThread(() -> { status.setText(done.toString()); browse(); });
         });
     }
 

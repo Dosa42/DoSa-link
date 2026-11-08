@@ -44,6 +44,7 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         store = new WorkshopStore(this);
+        new Thread(() -> { try { WorkshopFiles.recover(this); TerminalJobs.recover(this); } catch (Exception error) { android.util.Log.e("Workshop", "Tool recovery failed", error); } }, "tool-recovery").start();
         try {
             catalog = new JSONObject(new String(read(getAssets().open("workshop/catalog.json")), StandardCharsets.UTF_8));
             store.event("startup", "Local workspace opened");
