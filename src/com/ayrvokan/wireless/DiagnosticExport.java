@@ -18,6 +18,7 @@ public final class DiagnosticExport {
         JSONObject manifest = new JSONObject().put("schema", "wireless-workshop.diagnostics/1").put("package", context.getPackageName()).put("version", context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName).put("exportedUtc", java.time.Instant.now().toString()).put("filters", filter.json());
         Set<String> jobs = new LinkedHashSet<>();
         Set<String> terminals = new LinkedHashSet<>();
+        Set<String> debuggers = new LinkedHashSet<>();
         JSONArray files = new JSONArray();
         long count = 0;
         try (WorkshopStore store = new WorkshopStore(context); ZipOutputStream zip = new ZipOutputStream(destination)) {
@@ -33,6 +34,7 @@ public final class DiagnosticExport {
                     if (operation.matches("[a-zA-Z0-9-]+")) {
                         if (row.getString("module").equals("jadx")) jobs.add(operation);
                         if (row.getString("module").equals("terminal")) terminals.add(operation);
+                        if (row.getString("module").equals("debug")) debuggers.add(operation);
                     }
                 }
             }
@@ -52,6 +54,12 @@ public final class DiagnosticExport {
                 for (String name : new String[] {"request.json", "command.sh", "worker.json", "process.json", "stdin.log", "stdout.log", "stderr.log", "report.json", "failure.json"}) {
                     File file = new File(directory, name);
                     if (file.isFile()) attach(zip, files, file, "jobs/terminal/" + id + "/" + name);
+                }
+            }
+            for (String id : debuggers) {
+                File directory = DebugJobs.directory(context, id);
+                for (String name : new String[] {"request.json", "worker.json", "state.json", "agent-events.jsonl", "server.json", "server-process.json", "server-stdout.log", "server-stderr.log", "rsp.jsonl", "probe-result.json", "report.json", "failure.json", "endpoint-error.json"}) {
+                    File file = new File(directory, name); if (file.isFile()) attach(zip, files, file, "jobs/debug/" + id + "/" + name);
                 }
             }
             manifest.put("eventCount", count).put("files", files).put("scope", "All matching events through maximumEventId; attached job logs and reports, excluding source/resource trees.");

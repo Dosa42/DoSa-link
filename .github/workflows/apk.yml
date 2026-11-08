@@ -8,6 +8,8 @@ on:
       - 'jadx/**'
       - 'native/**'
       - 'terminal/**'
+      - 'debugger/**'
+      - 'tools/build_debugger.py'
       - 'tools/build_terminal.py'
       - 'tools/build_jadx.py'
       - 'tools/build.py'
@@ -63,6 +65,8 @@ jobs:
           key: ${{ steps.jadx-cache.outputs.cache-primary-key }}
       - name: Build embedded local shell
         run: python tools/build_terminal.py
+      - name: Build embedded Java and native debugger
+        run: python tools/build_debugger.py
       - name: Build and sign APK
         run: python tools/build.py
       - name: Verify preserved code and resources

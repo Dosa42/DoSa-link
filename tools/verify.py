@@ -80,11 +80,11 @@ def main():
         application = manifest.find('application')
         activities = application.findall('activity')
         components = {name: len(application.findall(name)) for name in ['activity', 'service', 'receiver', 'provider']}
-        if manifest.get('package') != 'com.ayrvokan.wireless' or application.get(NS + 'name') != 'android.app.Application':
+        if manifest.get('package') != 'com.ayrvokan.wireless' or application.get(NS + 'name') != 'com.ayrvokan.wireless.WorkshopApplication':
             raise ValueError('Unexpected private app identity/startup')
-        if components != {'activity': 5, 'service': 2, 'receiver': 0, 'provider': 0} or activities[0].get(NS + 'name') != 'com.ayrvokan.wireless.MainActivity':
+        if components != {'activity': 6, 'service': 4, 'receiver': 0, 'provider': 0} or activities[0].get(NS + 'name') != 'com.ayrvokan.wireless.MainActivity':
             raise ValueError('Unexpected startup components')
-        if {item.get(NS + 'name') for item in activities} != {'com.ayrvokan.wireless.MainActivity', 'com.ayrvokan.wireless.JadxActivity', 'com.ayrvokan.wireless.DiagnosticsActivity', 'com.ayrvokan.wireless.TerminalActivity', 'com.ayrvokan.wireless.FilesActivity'}:
+        if {item.get(NS + 'name') for item in activities} != {'com.ayrvokan.wireless.MainActivity', 'com.ayrvokan.wireless.JadxActivity', 'com.ayrvokan.wireless.DiagnosticsActivity', 'com.ayrvokan.wireless.TerminalActivity', 'com.ayrvokan.wireless.FilesActivity', 'com.ayrvokan.wireless.DebugActivity'}:
             raise ValueError('Unexpected activities')
         service = next(item for item in application.findall('service') if item.get(NS + 'name') == 'com.ayrvokan.wireless.JadxService')
         if service.get(NS + 'name') != 'com.ayrvokan.wireless.JadxService' or service.get(NS + 'process') != ':jadx' or service.get(NS + 'exported') != 'false':
@@ -119,7 +119,22 @@ def main():
         worker = next(item for item in application.findall('service') if item.get(NS + 'name') == 'com.ayrvokan.wireless.TerminalService')
         if worker.get(NS + 'process') != ':terminal' or worker.get(NS + 'exported') != 'false':
             raise ValueError('Unexpected terminal worker')
-        report = {'bundled_terminal': terminal, 'bundled_runtime_backend': tool['backend'], 'bundled_runtime_version': tool['runtimeVersion'], 'bundled_native_bridge_sha256': tool['nativeBridgeSha256'], 'bundled_jadx_version': tool['version'], 'bundled_jadx_engine_sha256': tool['engineSha256'], 'bundled_tool_files_verified': len(tool['files']), 'status': 'pass' if not missing_resources else 'resource-payload-review-required', 'original_apks': original_apks, 'byte_identical_original_code': categories, 'code_files_checked': len(expected_members), 'resource_ids_preserved': len(expected_ids), 'resource_ids_changed_or_missing': changed_ids, 'distinct_resource_payloads_checked': len(expected_resources), 'resource_payload_hashes_missing': missing_resources, 'locales': locales, 'private_startup_components': components, 'application': application.get(NS + 'name'), 'package': manifest.get('package'), 'single_apk': True, 'catalog_classes': len(catalog['classes']), 'catalog_bridge_declarations': catalog['bridgeDeclarations'], 'runtime_executed': False}
+        debugger = json.loads(archive.read('assets/workshop/debugger/tool.json'))
+        for name, expected in debugger['files'].items():
+            member = 'lib/arm64-v8a/' + name if name.endswith('.so') else 'assets/workshop/debugger/' + name
+            data = archive.read(member)
+            if sha(data) != expected:
+                raise ValueError('Bundled debugger mismatch: ' + name)
+            if name.endswith('.so') and (data[:4] != b'\x7fELF' or int.from_bytes(data[18:20], 'little') != 183):
+                raise ValueError('Debugger native component is not ARM64 ELF: ' + name)
+        for component, process in [('DebugService', ':debugger'), ('DebugProbeService', ':debugprobe')]:
+            worker = next(item for item in application.findall('service') if item.get(NS + 'name') == 'com.ayrvokan.wireless.' + component)
+            if worker.get(NS + 'process') != process or worker.get(NS + 'exported') != 'false':
+                raise ValueError('Unexpected debugger component: ' + component)
+        debug_activity = next(item for item in activities if item.get(NS + 'name') == 'com.ayrvokan.wireless.DebugActivity')
+        if debug_activity.get(NS + 'process') != ':debugger':
+            raise ValueError('Debugger UI is not isolated from its targets')
+        report = {'bundled_debugger': debugger, 'bundled_terminal': terminal, 'bundled_runtime_backend': tool['backend'], 'bundled_runtime_version': tool['runtimeVersion'], 'bundled_native_bridge_sha256': tool['nativeBridgeSha256'], 'bundled_jadx_version': tool['version'], 'bundled_jadx_engine_sha256': tool['engineSha256'], 'bundled_tool_files_verified': len(tool['files']), 'status': 'pass' if not missing_resources else 'resource-payload-review-required', 'original_apks': original_apks, 'byte_identical_original_code': categories, 'code_files_checked': len(expected_members), 'resource_ids_preserved': len(expected_ids), 'resource_ids_changed_or_missing': changed_ids, 'distinct_resource_payloads_checked': len(expected_resources), 'resource_payload_hashes_missing': missing_resources, 'locales': locales, 'private_startup_components': components, 'application': application.get(NS + 'name'), 'package': manifest.get('package'), 'single_apk': True, 'catalog_classes': len(catalog['classes']), 'catalog_bridge_declarations': catalog['bridgeDeclarations'], 'runtime_executed': False}
         (ROOT / 'evidence/preservation.json').write_text(json.dumps(report, indent=2) + '\n')
         (ROOT / 'evidence/packaged-manifest.xml').write_bytes(AXMLPrinter(archive.read('AndroidManifest.xml')).get_xml())
     if missing_resources:

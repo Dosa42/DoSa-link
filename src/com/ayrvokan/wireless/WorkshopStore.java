@@ -95,7 +95,7 @@ public final class WorkshopStore extends SQLiteOpenHelper {
         if (!unchanged) {
             JSONObject payload = new JSONObject();
             try { payload.put("jobId", id).put("label", label).put("state", state); } catch (Exception error) { throw new IllegalStateException(error); }
-            trace("failed".equals(state) ? "ERROR" : "interrupted".equals(state) || "completed-with-errors".equals(state) ? "WARN" : "INFO", kind, state, session, id, "", "", kind.equals("jadx") ? "jni" : "local-process", detail, payload, System.currentTimeMillis() - started);
+            trace("failed".equals(state) ? "ERROR" : "interrupted".equals(state) || "completed-with-errors".equals(state) ? "WARN" : "INFO", kind, state, session, id, "", "", kind.equals("jadx") ? "jni" : kind.equals("debug") ? "debugger" : "local-process", detail, payload, System.currentTimeMillis() - started);
         }
     }
 
@@ -104,7 +104,7 @@ public final class WorkshopStore extends SQLiteOpenHelper {
         String session = sessionId();
         long started = System.currentTimeMillis();
         try (Cursor cursor = getReadableDatabase().rawQuery("SELECT session_id,started_at,kind FROM jobs WHERE id=?", new String[] {id})) { if (cursor.moveToFirst()) { session = cursor.getString(0); started = cursor.getLong(1); kind = cursor.getString(2); } }
-        trace(level, kind, phase, session, id, id + (kind.equals("jadx") ? "-jni" : "-terminal"), "", kind.equals("jadx") ? "jni" : "local-process", message, payload, System.currentTimeMillis() - started);
+        trace(level, kind, phase, session, id, id + (kind.equals("jadx") ? "-jni" : "-" + kind), "", kind.equals("jadx") ? "jni" : kind.equals("debug") ? "debugger" : "local-process", message, payload, System.currentTimeMillis() - started);
     }
 
     public JSONArray jobs() throws Exception { return jobs("jadx"); }

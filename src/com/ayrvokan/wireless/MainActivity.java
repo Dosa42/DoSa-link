@@ -44,7 +44,7 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         store = new WorkshopStore(this);
-        new Thread(() -> { try { WorkshopFiles.recover(this); TerminalJobs.recover(this); } catch (Exception error) { android.util.Log.e("Workshop", "Tool recovery failed", error); } }, "tool-recovery").start();
+        new Thread(() -> { try { WorkshopFiles.recover(this); TerminalJobs.recover(this); DebugJobs.recover(this); } catch (Exception error) { android.util.Log.e("Workshop", "Tool recovery failed", error); } }, "tool-recovery").start();
         try {
             catalog = new JSONObject(new String(read(getAssets().open("workshop/catalog.json")), StandardCharsets.UTF_8));
             store.event("startup", "Local workspace opened");
@@ -141,6 +141,7 @@ public final class MainActivity extends Activity {
         tools.addView(text("Check the app's storage and keep the result in Activity.", 14, MUTED));
         tools.addView(button("Check local storage", this::storageCheck));
         tools.addView(button("Open diagnostic logs", () -> startActivity(new android.content.Intent(this, DiagnosticsActivity.class))));
+        tools.addView(button("Open app debugger", () -> startActivity(new android.content.Intent(this, DebugActivity.class))));
         tools.addView(button("Open local terminal", () -> startActivity(new android.content.Intent(this, TerminalActivity.class))));
         tools.addView(button("Open files", () -> startActivity(new android.content.Intent(this, FilesActivity.class))));
         tools.addView(button("Open JADX headless", () -> startActivity(new android.content.Intent(this, JadxActivity.class))));
