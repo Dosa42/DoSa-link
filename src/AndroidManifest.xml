@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.ayrvokan.wireless" android:versionCode="10" android:versionName="0.5.2">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.ayrvokan.wireless" android:versionCode="11" android:versionName="0.5.3">
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <application android:name="com.ayrvokan.wireless.WorkshopApplication" android:label="Wireless Workshop" android:icon="@android:drawable/ic_menu_manage" android:theme="@android:style/Theme.Material.NoActionBar" android:debuggable="true" android:largeHeap="true" android:allowNativeHeapPointerTagging="false" android:extractNativeLibs="true" android:usesCleartextTraffic="true">
         <activity android:name="com.ayrvokan.wireless.MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -15,8 +16,12 @@
         <activity android:name="com.ayrvokan.wireless.TerminalActivity" android:exported="true" android:windowSoftInputMode="adjustResize" />
         <activity android:name="com.ayrvokan.wireless.FilesActivity" android:exported="true" android:windowSoftInputMode="adjustResize" />
         <activity android:name="com.ayrvokan.wireless.DebugActivity" android:process=":debugger" android:exported="true" android:windowSoftInputMode="adjustResize" />
-        <service android:name="com.ayrvokan.wireless.DebugService" android:exported="false" android:process=":debugger" android:foregroundServiceType="dataSync" />
-        <service android:name="com.ayrvokan.wireless.DebugProbeService" android:exported="false" android:process=":debugprobe" android:foregroundServiceType="dataSync" />
+        <service android:name="com.ayrvokan.wireless.DebugService" android:exported="false" android:process=":debugger" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Interactive local Java and native app debugging" />
+        </service>
+        <service android:name="com.ayrvokan.wireless.DebugProbeService" android:exported="false" android:process=":debugprobe" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Dedicated local target for app breakpoint and inspection sessions" />
+        </service>
         <service android:name="com.ayrvokan.wireless.TerminalService" android:exported="false" android:process=":terminal" android:foregroundServiceType="dataSync" />
         <service android:name="com.ayrvokan.wireless.JadxService" android:exported="false" android:process=":jadx" android:foregroundServiceType="dataSync" />
     </application>

@@ -62,7 +62,7 @@ public final class DebugActivity extends Activity {
         status = text(body, "", 14); observed = text(body, "", 12); observed.setTypeface(android.graphics.Typeface.MONOSPACE); observed.setTextIsSelectable(true);
         text(body, "Session history", 18); history = new LinearLayout(this); history.setOrientation(1); body.addView(history);
         if (state != null) selected = state.getString("selected", "");
-        processes(); handle(getIntent());
+        processes(); if (state == null) handle(getIntent());
     }
     @Override public void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); handle(intent); }
     @Override public void onResume() { super.onResume(); resumed = true; handler.post(tick); }
@@ -108,6 +108,8 @@ public final class DebugActivity extends Activity {
         if (loading) return; loading = true;
         new Thread(() -> {
             try {
+                File current = new File(getFilesDir(), "debugger-live.json");
+                if (selected.isEmpty() && current.isFile()) selected = new JSONObject(JadxJobs.read(current)).optString("id");
                 File latest = new File(getFilesDir(), "debugger-state.json");
                 if (selected.isEmpty() && latest.isFile()) selected = new JSONObject(JadxJobs.read(latest)).optString("jobId");
                 boolean live = false; String detail = "No session selected", text = "";

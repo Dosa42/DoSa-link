@@ -129,7 +129,7 @@ def main():
                 raise ValueError('Debugger native component is not ARM64 ELF: ' + name)
         for component, process in [('DebugService', ':debugger'), ('DebugProbeService', ':debugprobe')]:
             worker = next(item for item in application.findall('service') if item.get(NS + 'name') == 'com.ayrvokan.wireless.' + component)
-            if worker.get(NS + 'process') != process or worker.get(NS + 'exported') != 'false':
+            if worker.get(NS + 'process') != process or worker.get(NS + 'exported') != 'false' or worker.get(NS + 'foregroundServiceType') != 'specialUse' or worker.find('property') is None:
                 raise ValueError('Unexpected debugger component: ' + component)
         debug_activity = next(item for item in activities if item.get(NS + 'name') == 'com.ayrvokan.wireless.DebugActivity')
         if debug_activity.get(NS + 'process') != ':debugger':
