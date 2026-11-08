@@ -15,6 +15,7 @@ on:
       - 'tools/build.py'
       - 'tools/verify.py'
       - 'tools/ci.py'
+      - 'tools/preflight.py'
       - 'tools/MergeInputs.java'
       - 'ci-inputs.json'
       - '.github/workflows/apk.yml'
@@ -56,6 +57,8 @@ jobs:
         env:
           WORKSHOP_INPUT_PASSWORD: ${{ secrets.WORKSHOP_INPUT_PASSWORD }}
         run: python tools/ci.py prepare
+      - name: Check Android source and manifest before packaging
+        run: python tools/preflight.py
       - name: Build self-contained JADX engine
         run: python tools/build_jadx.py
       - uses: actions/cache/save@v4

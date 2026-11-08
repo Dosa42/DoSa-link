@@ -63,7 +63,7 @@ def catalog():
         'bridgeDeclarations': sum(module['declared_ReactMethod_count'] for module in managed['modules']),
         'groups': [{'id': group['id'], 'label': labels.get(group['id'], group['id']), 'classes': group['owner_class_count'], 'methods': group['ReactMethod_declaration_count']} for group in managed['groups']],
         'classes': [{'name': module['class_name'], 'group': module['group'], 'methods': module['declared_ReactMethod_count']} for module in managed['modules']],
-        'libraries': [{'name': module['filename'], 'role': module['role'], 'sha256': module['sha256']} for module in native['modules']]
+        'libraries': [{'name': module['filename'], 'role': module['role'], 'sha256': module['sha256'], 'needed': module['dependencies']['dt_needed']} for module in native['modules']]
     }
     if value['bridgeDeclarations'] != 1101 or len(value['libraries']) != 100:
         raise ValueError('Module inventory mismatch')
@@ -88,7 +88,8 @@ def manifest():
         index += 1
         retained.append(name)
     target.write(WORK / 'AndroidManifest.xml', encoding='utf-8', xml_declaration=True)
-    (ROOT / 'evidence/manifest-changes.json').write_text(json.dumps({'package': root.get('package'), 'application': 'com.ayrvokan.wireless.WorkshopApplication', 'activities': ['com.ayrvokan.wireless.MainActivity', 'com.ayrvokan.wireless.JadxActivity', 'com.ayrvokan.wireless.DiagnosticsActivity', 'com.ayrvokan.wireless.TerminalActivity', 'com.ayrvokan.wireless.FilesActivity', 'com.ayrvokan.wireless.DebugActivity'], 'original_component_entry_points_registered': 0, 'providers': 0, 'services': 5, 'receivers': 0, 'retained_device_permissions': retained, 'omitted_permissions': removed}, indent=2) + '\n')
+    app = root.find('application')
+    (ROOT / 'evidence/manifest-changes.json').write_text(json.dumps({'package': root.get('package'), 'application': app.get(NS + 'name'), 'activities': [item.get(NS + 'name') for item in app.findall('activity')], 'original_component_entry_points_registered': 0, 'providers': len(app.findall('provider')), 'services': len(app.findall('service')), 'receivers': len(app.findall('receiver')), 'retained_device_permissions': retained, 'omitted_permissions': removed}, indent=2) + '\n')
 
 def signing_key():
     private = ROOT / 'private'
@@ -175,7 +176,7 @@ def main():
     run('verify-apk-alignment', ['zipalign', '-c', '-P', '16', '4', signed])
     final = ROOT / 'dist/wireless-workshop.apk'
     signed.replace(final)
-    receipt = {'package': 'com.ayrvokan.wireless', 'version': '0.5.6', 'artifact': str(final), 'bytes': final.stat().st_size, 'sha256': digest(final), 'baseline_apks': inputs, 'added_dex': 'classes' + str(highest + 1) + '.dex', 'editor': {'version': '1.4.9', 'sha256': EDITOR_SHA}, 'built_at_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
+    receipt = {'package': 'com.ayrvokan.wireless', 'version': ET.parse(ROOT / 'src/AndroidManifest.xml').getroot().get(NS + 'versionName'), 'artifact': str(final), 'bytes': final.stat().st_size, 'sha256': digest(final), 'baseline_apks': inputs, 'added_dex': 'classes' + str(highest + 1) + '.dex', 'editor': {'version': '1.4.9', 'sha256': EDITOR_SHA}, 'built_at_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
     (ROOT / 'evidence/build.json').write_text(json.dumps(receipt, indent=2) + '\n')
     print(json.dumps({'stage': 'apk-built', 'artifact': str(final), 'bytes': receipt['bytes'], 'sha256': receipt['sha256']}), flush=True)
 

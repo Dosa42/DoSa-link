@@ -142,6 +142,7 @@ public final class MainActivity extends Activity {
         tools.addView(button("Check local storage", this::storageCheck));
         tools.addView(button("Open diagnostic logs", () -> startActivity(new android.content.Intent(this, DiagnosticsActivity.class))));
         tools.addView(button("Open app debugger", () -> startActivity(new android.content.Intent(this, DebugActivity.class))));
+        tools.addView(button("Discover wireless devices", () -> startActivity(new android.content.Intent(this, WirelessActivity.class))));
         tools.addView(button("Open local terminal", () -> startActivity(new android.content.Intent(this, TerminalActivity.class))));
         tools.addView(button("Open files", () -> startActivity(new android.content.Intent(this, FilesActivity.class))));
         tools.addView(button("Open JADX headless", () -> startActivity(new android.content.Intent(this, JadxActivity.class))));
