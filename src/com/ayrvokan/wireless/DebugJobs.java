@@ -102,6 +102,8 @@ public final class DebugJobs {
             java.nio.file.Files.deleteIfExists(marker.toPath());
         }
         try (WorkshopStore store = new WorkshopStore(context)) {
+            android.database.sqlite.SQLiteDatabase database = store.getWritableDatabase(); database.beginTransaction();
+            try {
             JSONArray jobs = store.jobs("debug");
             for (int i = 0; i < jobs.length(); i++) {
                 JSONObject job = jobs.getJSONObject(i); if (!active(job.getString("state"))) continue;
@@ -123,6 +125,8 @@ public final class DebugJobs {
                 if (!report.isFile()) JadxJobs.write(report, new JSONObject().put("status", "interrupted").put("mode", request.getString("mode")).put("targetPid", request.getInt("targetPid")).put("recoveredUtc", java.time.Instant.now().toString()).put("lastSnapshotRetained", true));
                 store.job("debug", job.getString("id"), job.getString("label"), report.isFile() ? new JSONObject(JadxJobs.read(report)).getString("status") : "interrupted", report.isFile() ? "Finished debug session recovered" : "Controller exited; debug session recovered");
             }
+            database.setTransactionSuccessful();
+            } finally { database.endTransaction(); }
         }
     }
 }
