@@ -84,7 +84,7 @@ public final class JadxActivity extends Activity {
             startActivityForResult(pick, 31);
         }));
         LinearLayout samples = new LinearLayout(this);
-        for (String type : new String[] {"apk", "dex", "java", "smali"}) samples.addView(button(type.toUpperCase(java.util.Locale.ROOT) + " sample", () -> fixture(type)), new LinearLayout.LayoutParams(0, -2, 1));
+        for (String type : new String[] {"apk", "dex", "java", "smali", "multi"}) samples.addView(button(type.toUpperCase(java.util.Locale.ROOT) + " sample", () -> fixture(type)), new LinearLayout.LayoutParams(0, -2, 1));
         root.addView(samples);
         root.addView(button("Use this installed APK", () -> {
             source = getApplicationInfo().sourceDir;
@@ -164,7 +164,7 @@ public final class JadxActivity extends Activity {
     }
 
     private void fixture(String type) {
-        String file = type.equals("java") ? "SeedProbe.class" : type.equals("smali") ? "SeedProbe.smali" : "fixture." + type;
+        String file = type.equals("multi") ? "multi-dex.apk" : type.equals("java") ? "SeedProbe.class" : type.equals("smali") ? "SeedProbe.smali" : "fixture." + type;
         source = "asset:workshop/jadx/fixtures/" + file;
         label = file;
         selected.setText(label);

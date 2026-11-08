@@ -35,10 +35,31 @@ public final class Runner {
         System.out.println(run(arguments[0], arguments[1], arguments[2]));
     }
 
-    private static void write(File file, JSONObject value) throws Exception {
+    static void write(File file, JSONObject value) throws Exception {
         File temp = new File(file.getPath() + ".part");
         Files.write(temp.toPath(), value.toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8));
         Files.move(temp.toPath(), file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private static JadxArgs configure(List<String> options, String selected, File output, File runtime) throws Exception {
+        JadxCLIArgs cli = new JadxCLIArgs();
+        if (!cli.processArgs(options.toArray(new String[0]))) throw new IllegalArgumentException("JADX did not accept these options");
+        JadxArgs args = cli.toJadxArgs();
+        args.setOutDir(output);
+        if (!selected.isEmpty()) args.setClassFilter(name -> name.equals(selected) || name.startsWith(selected + "$"));
+        args.setOutDirSrc(new File(output, "sources"));
+        args.setOutDirRes(new File(output, "resources"));
+        args.setFilesGetter(new IJadxFilesGetter() {
+            private Path directory(String name) {
+                File dir = new File(runtime, name);
+                dir.mkdirs();
+                return dir.toPath();
+            }
+            @Override public Path getConfigDir() { return directory("config"); }
+            @Override public Path getCacheDir() { return directory("cache"); }
+            @Override public Path getTempDir() { return directory("temp"); }
+        });
+        return args;
     }
 
     public static String run(String requestPath, String outputPath, String progressPath) throws Exception {
@@ -74,25 +95,9 @@ public final class Runner {
                 options.add(selected);
             }
             options.add(request.getString("input"));
-            JadxCLIArgs cli = new JadxCLIArgs();
-            if (!cli.processArgs(options.toArray(new String[0]))) throw new IllegalArgumentException("JADX did not accept these options");
-            if (options.stream().noneMatch(value -> value.equals("--log-level") || value.equals("--quiet") || value.equals("-q") || value.equals("--verbose") || value.equals("-v"))) logger.setLevel(Level.INFO);
-            JadxArgs args = cli.toJadxArgs();
-            args.setOutDir(output);
-            if (!selected.isEmpty()) args.setClassFilter(name -> name.equals(selected) || name.startsWith(selected + "$"));
-            args.setOutDirSrc(new File(output, "sources"));
-            args.setOutDirRes(new File(output, "resources"));
             File runtime = new File(output, ".runtime");
-            args.setFilesGetter(new IJadxFilesGetter() {
-                private Path directory(String name) {
-                    File dir = new File(runtime, name);
-                    dir.mkdirs();
-                    return dir.toPath();
-                }
-                @Override public Path getConfigDir() { return directory("config"); }
-                @Override public Path getCacheDir() { return directory("cache"); }
-                @Override public Path getTempDir() { return directory("temp"); }
-            });
+            JadxArgs args = configure(options, selected, output, runtime);
+            if (options.stream().noneMatch(value -> value.equals("--log-level") || value.equals("--quiet") || value.equals("-q") || value.equals("--verbose") || value.equals("-v"))) logger.setLevel(Level.INFO);
             JSONArray plugins = new JSONArray();
             for (JadxPlugin plugin : ServiceLoader.load(JadxPlugin.class, Runner.class.getClassLoader())) plugins.put(plugin.getPluginInfo().getPluginId());
             JSONObject report = new JSONObject();
@@ -109,74 +114,81 @@ public final class Runner {
             report.put("javaVersion", System.getProperty("java.version"));
             report.put("runtimeBackend", Boolean.getBoolean("workshop.jni") ? "jni-hotspot" : "host-jvm");
             report.put("vmArguments", new JSONArray(java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments()));
-            report.put("staging", "shared-analysis-context/ordered-dex-output");
-            report.put("metadataLoadCount", 1);
-            report.put("crossDexContextPreserved", true);
+            boolean stagedApk = args.getInputFiles().size() == 1 && args.getInputFiles().get(0).getName().toLowerCase(java.util.Locale.ROOT).endsWith(".apk");
+            report.put("staging", stagedApk ? "per-unit-load/compact-signature-index" : "shared-analysis-context/ordered-dex-output");
+            report.put("metadataLoadCount", stagedApk ? JSONObject.NULL : 1);
+            if (!stagedApk) report.put("crossDexContextPreserved", true);
             File progress = new File(progressPath);
             write(new File(output, "runtime-start.json"), report);
             write(progress, new JSONObject().put("phase", "Loading input").put("completed", 0).put("total", 0));
-            try (JadxDecompiler jadx = new JadxDecompiler(args)) {
-                jadx.load();
-                report.put("classes", jadx.getClasses().size());
-                report.put("resources", jadx.getResources().size());
-                JSONArray stages = new JSONArray();
-                if (!args.isSkipResources()) {
-                    write(progress, new JSONObject().put("phase", "Saving resources").put("completed", 0).put("total", jadx.getResources().size()));
-                    jadx.saveResources();
-                }
-                AtomicInteger exported = new AtomicInteger();
-                java.util.Set<String> saved = ConcurrentHashMap.newKeySet();
-                if (!args.isSkipSources()) {
-                    Map<String, List<JavaClass>> groups = new LinkedHashMap<>();
-                    for (JavaClass cls : jadx.getClasses()) {
-                        ClassNode node = cls.getClassNode();
-                        if (node.contains(AFlag.DONT_GENERATE)) continue;
-                        if (args.getClassFilter() != null && !args.getClassFilter().test(node.getClassInfo().getFullName())) continue;
-                        String origin = node.getInputFileName();
-                        if (origin == null) origin = "generated";
-                        java.util.regex.Matcher dex = java.util.regex.Pattern.compile("classes(?:[0-9]+)?\\.dex").matcher(origin);
-                        String key = dex.find() ? dex.group() : new File(origin).getName();
-                        groups.computeIfAbsent(key, value -> new ArrayList<>()).add(cls);
+            if (stagedApk) {
+                JSONObject result = StagedApk.run(args, destination -> configure(options, selected, destination, runtime), progress);
+                for (String key : result.keySet()) report.put(key, result.get(key));
+                report.remove("crossDexContextPreserved");
+            } else {
+                try (JadxDecompiler jadx = new JadxDecompiler(args)) {
+                    jadx.load();
+                    report.put("classes", jadx.getClasses().size());
+                    report.put("resources", jadx.getResources().size());
+                    JSONArray stages = new JSONArray();
+                    if (!args.isSkipResources()) {
+                        write(progress, new JSONObject().put("phase", "Saving resources").put("completed", 0).put("total", jadx.getResources().size()));
+                        jadx.saveResources();
                     }
-                    int stageNumber = 0;
-                    for (Map.Entry<String, List<JavaClass>> group : groups.entrySet()) {
-                        stageNumber++;
-                        long stageStarted = System.currentTimeMillis();
-                        String phase = "DEX " + stageNumber + "/" + groups.size() + ": " + group.getKey();
-                        int before = exported.get();
-                        TaskExecutor executor = new TaskExecutor();
-                        executor.setThreadsCount(args.getThreadsCount());
-                        List<Runnable> tasks = new ArrayList<>();
-                        for (List<JavaClass> batch : jadx.getDecompileScheduler().buildBatches(group.getValue())) {
-                            tasks.add(() -> {
-                                for (JavaClass cls : batch) {
-                                    ClassNode node = cls.getClassNode();
-                                    if (!saved.add(node.getRawName())) continue;
-                                    try {
-                                        SaveCode.save(args.getOutDirSrc(), node, node.getCode());
-                                        exported.incrementAndGet();
-                                    } catch (Exception error) {
-                                        logger.error("Unable to save " + node.getRawName(), error);
-                                        saved.remove(node.getRawName());
+                    AtomicInteger exported = new AtomicInteger();
+                    java.util.Set<String> saved = ConcurrentHashMap.newKeySet();
+                    if (!args.isSkipSources()) {
+                        Map<String, List<JavaClass>> groups = new LinkedHashMap<>();
+                        for (JavaClass cls : jadx.getClasses()) {
+                            ClassNode node = cls.getClassNode();
+                            if (node.contains(AFlag.DONT_GENERATE)) continue;
+                            if (args.getClassFilter() != null && !args.getClassFilter().test(node.getClassInfo().getFullName())) continue;
+                            String origin = node.getInputFileName();
+                            if (origin == null) origin = "generated";
+                            java.util.regex.Matcher dex = java.util.regex.Pattern.compile("classes(?:[0-9]+)?\\.dex").matcher(origin);
+                            String key = dex.find() ? dex.group() : new File(origin).getName();
+                            groups.computeIfAbsent(key, value -> new ArrayList<>()).add(cls);
+                        }
+                        int stageNumber = 0;
+                        for (Map.Entry<String, List<JavaClass>> group : groups.entrySet()) {
+                            stageNumber++;
+                            long stageStarted = System.currentTimeMillis();
+                            String phase = "DEX " + stageNumber + "/" + groups.size() + ": " + group.getKey();
+                            int before = exported.get();
+                            TaskExecutor executor = new TaskExecutor();
+                            executor.setThreadsCount(args.getThreadsCount());
+                            List<Runnable> tasks = new ArrayList<>();
+                            for (List<JavaClass> batch : jadx.getDecompileScheduler().buildBatches(group.getValue())) {
+                                tasks.add(() -> {
+                                    for (JavaClass cls : batch) {
+                                        ClassNode node = cls.getClassNode();
+                                        if (!saved.add(node.getRawName())) continue;
+                                        try {
+                                            SaveCode.save(args.getOutDirSrc(), node, node.getCode());
+                                            exported.incrementAndGet();
+                                        } catch (Exception error) {
+                                            logger.error("Unable to save " + node.getRawName(), error);
+                                            saved.remove(node.getRawName());
+                                        }
                                     }
-                                }
-                            });
+                                });
+                            }
+                            executor.addParallelTasks(tasks);
+                            executor.execute();
+                            while (executor.isRunning()) {
+                                write(progress, new JSONObject().put("phase", phase).put("stage", stageNumber).put("stages", groups.size()).put("completed", executor.getProgress()).put("total", executor.getTasksCount()));
+                                Thread.sleep(1000);
+                            }
+                            executor.awaitTermination();
+                            stages.put(new JSONObject().put("input", group.getKey()).put("classesSelected", group.getValue().size()).put("classesExported", exported.get() - before).put("elapsedMillis", System.currentTimeMillis() - stageStarted));
                         }
-                        executor.addParallelTasks(tasks);
-                        executor.execute();
-                        while (executor.isRunning()) {
-                            write(progress, new JSONObject().put("phase", phase).put("stage", stageNumber).put("stages", groups.size()).put("completed", executor.getProgress()).put("total", executor.getTasksCount()));
-                            Thread.sleep(1000);
-                        }
-                        executor.awaitTermination();
-                        stages.put(new JSONObject().put("input", group.getKey()).put("classesSelected", group.getValue().size()).put("classesExported", exported.get() - before).put("elapsedMillis", System.currentTimeMillis() - stageStarted));
                     }
+                    report.put("stages", stages);
+                    report.put("exportedClasses", exported.get());
+                    jadx.printErrorsReport();
+                    report.put("errors", jadx.getErrorsCount());
+                    report.put("warnings", jadx.getWarnsCount());
                 }
-                report.put("stages", stages);
-                report.put("exportedClasses", exported.get());
-                jadx.printErrorsReport();
-                report.put("errors", jadx.getErrorsCount());
-                report.put("warnings", jadx.getWarnsCount());
             }
             report.put("elapsedMillis", System.currentTimeMillis() - started);
             report.put("status", report.getInt("errors") == 0 ? "completed" : "completed-with-errors");

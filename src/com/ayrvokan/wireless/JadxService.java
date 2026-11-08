@@ -77,7 +77,7 @@ public final class JadxService extends Service {
                 if (source.startsWith("asset:")) {
                     File seed = new File(working, "sources/com/ayrvokan/fixture/SeedProbe.java");
                     boolean passed = seed.isFile() && JadxJobs.read(seed).contains("42") && JadxJobs.read(seed).contains("answer");
-                    if (label.equals("fixture.apk")) {
+                    if (label.endsWith(".apk")) {
                         File manifest = new File(working, "resources/AndroidManifest.xml");
                         File strings = new File(working, "resources/res/values/strings.xml");
                         passed = passed && manifest.isFile() && strings.isFile() && JadxJobs.read(strings).contains("Embedded engine verified");

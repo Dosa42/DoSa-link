@@ -48,6 +48,25 @@ def main():
     if len(classes) != 1:
         raise ValueError('Expected one compiled SeedProbe fixture')
     shutil.copyfile(classes[0], samples / 'SeedProbe.class')
+    class_root = WORK / 'cross-dex-fixture-classes'
+    class_root.mkdir(exist_ok=True)
+    fixture_sources = ROOT / 'jadx/fixture/src/main/java/com/ayrvokan/fixture'
+    run('compile-cross-dex-fixture-classes', ['javac', '--release', '8', '-d', class_root, fixture_sources / 'SeedProbe.java', fixture_sources / 'StageBase.java', fixture_sources / 'StageChild.java'])
+    first_dex = WORK / 'fixture-dex-one'
+    second_dex = WORK / 'fixture-dex-two'
+    first_dex.mkdir(exist_ok=True)
+    second_dex.mkdir(exist_ok=True)
+    fixture_package = class_root / 'com/ayrvokan/fixture'
+    d8 = SDK / 'build-tools/35.0.0/d8'
+    android = SDK / 'platforms/android-35/android.jar'
+    run('compile-first-cross-dex-fixture-unit', [d8, '--min-api', '26', '--lib', android, '--classpath', class_root, '--output', first_dex, fixture_package / 'SeedProbe.class', fixture_package / 'StageBase.class'])
+    run('compile-second-cross-dex-fixture-unit', [d8, '--min-api', '26', '--lib', android, '--classpath', class_root, '--output', second_dex, fixture_package / 'StageChild.class', fixture_package / 'StageBase$Nested.class'])
+    with zipfile.ZipFile(fixture) as original, zipfile.ZipFile(samples / 'multi-dex.apk', 'w') as output:
+        for member in original.infolist():
+            if not member.filename.endswith('.dex'):
+                output.writestr(member, original.read(member))
+        output.write(first_dex / 'classes.dex', 'classes.dex')
+        output.write(second_dex / 'classes.dex', 'classes2.dex')
     (samples / 'SeedProbe.smali').write_text('.class public final Lcom/ayrvokan/fixture/SeedProbe;\n.super Ljava/lang/Object;\n\n.method public static answer()I\n    .locals 1\n    const/16 v0, 0x2a\n    return v0\n.end method\n')
     test_request = WORK / 'jvm-fixture-request.json'
     test_output = WORK / 'jvm-fixture-result'
@@ -63,6 +82,19 @@ def main():
     if '42' not in (test_output / 'sources/com/ayrvokan/fixture/SeedProbe.java').read_text():
         raise ValueError('Staged JVM engine output differs from fixture')
     shutil.copyfile(test_output / 'engine-report.json', ROOT / 'evidence/jadx-jvm-fixture.json')
+    multi_output = WORK / 'jvm-multi-fixture-result'
+    if multi_output.exists():
+        shutil.rmtree(multi_output)
+    test_request.write_text(json.dumps({'input': str(samples / 'multi-dex.apk'), 'options': [], 'selectedClass': ''}))
+    run('verify-real-cross-dex-staging', ['java', '-classpath', classpath, 'com.ayrvokan.jadxengine.Runner', test_request, multi_output, test_progress])
+    multi_report = json.loads((multi_output / 'engine-report.json').read_text())
+    if multi_report['errors'] or len(multi_report['stages']) != 2 or multi_report['crossDexFamilyRelocations'] < 1:
+        raise ValueError('Cross-DEX staging or inner-family preservation failed')
+    base_source = (multi_output / 'sources/com/ayrvokan/fixture/StageBase.java').read_text()
+    child_source = (multi_output / 'sources/com/ayrvokan/fixture/StageChild.java').read_text()
+    if 'Nested' not in base_source or 'StageBase<String>' not in child_source or 'cross-DEX type context' not in child_source:
+        raise ValueError('Cross-DEX generic types or inner-class output differs from fixture')
+    shutil.copyfile(multi_output / 'engine-report.json', ROOT / 'evidence/jadx-jvm-multi-fixture.json')
     runtime = json.loads((ROOT / 'native/runtime.json').read_text())
     source = WORK / 'android-jre.tar.xz'
     if not source.exists() or digest(source) != runtime['sha256']:
