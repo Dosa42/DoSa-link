@@ -26,7 +26,7 @@ def main():
     with (ROOT / 'evidence/debugger-build.log').open('w') as log:
         command = [str(llvm / 'bin/aarch64-linux-android26-clang++'), '-std=c++17', '-O0', '-g', '-fPIC', '-shared', '-static-libstdc++', '-fno-omit-frame-pointer', '-fno-optimize-sibling-calls', '-Wall', '-Wextra', '-Werror', '-I', str(includes), '-Wl,-z,max-page-size=16384', '-Wl,--build-id=sha1', str(ROOT / 'debugger/agent.cpp'), '-ldl', '-o', str(library)]
         subprocess.run(command, check=True, stdout=log, stderr=subprocess.STDOUT)
-        subprocess.run([str(llvm / 'bin/aarch64-linux-android26-clang'), '-O2', '-fPIE', '-pie', '-Wall', '-Wextra', '-Werror', '-Wl,-z,max-page-size=16384', str(ROOT / 'debugger/launcher.c'), '-o', str(SEED / 'libworkshop_lldb_launch.so')], check=True, stdout=log, stderr=subprocess.STDOUT)
+        subprocess.run([str(llvm / 'bin/aarch64-linux-android26-clang++'), '-std=c++17', '-static-libstdc++', '-O2', '-fPIE', '-pie', '-Wall', '-Wextra', '-Werror', '-Wl,-z,max-page-size=16384', str(ROOT / 'debugger/launcher.cpp'), '-o', str(SEED / 'libworkshop_lldb_launch.so')], check=True, stdout=log, stderr=subprocess.STDOUT)
     servers = list((llvm / 'lib/clang').glob('*/lib/linux/aarch64/lldb-server'))
     if len(servers) != 1:
         raise RuntimeError('Expected one NDK ARM64 lldb-server: ' + str(servers))

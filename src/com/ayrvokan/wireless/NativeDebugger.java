@@ -42,7 +42,7 @@ public final class NativeDebugger implements AutoCloseable {
         try (ServerSocket listener = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
             listener.setSoTimeout(250);
             File executable = new File(context.getApplicationInfo().nativeLibraryDir, "libworkshop_lldb.so");
-            child = new ProcessBuilder(new File(context.getApplicationInfo().nativeLibraryDir, "libworkshop_lldb_launch.so").getPath(), new File(folder, "server-process.json").getPath(), executable.getPath(), "gdbserver", "--reverse-connect", "127.0.0.1:" + listener.getLocalPort(), "--attach", Integer.toString(pid)).redirectOutput(new File(folder, "server-stdout.log")).redirectError(new File(folder, "server-stderr.log")).start();
+            child = new ProcessBuilder(new File(context.getApplicationInfo().nativeLibraryDir, "libworkshop_lldb_launch.so").getPath(), new File(folder, "server-process.json").getPath(), executable.getPath(), "127.0.0.1:" + listener.getLocalPort(), Integer.toString(pid)).redirectOutput(new File(folder, "server-stdout.log")).redirectError(new File(folder, "server-stderr.log")).start();
             long started = android.os.SystemClock.elapsedRealtime();
             while (connected == null) {
                 try { connected = listener.accept(); }
@@ -157,7 +157,7 @@ public final class NativeDebugger implements AutoCloseable {
         }
         return result;
     }
-    public void detach() throws Exception { if (detached) return; String result = exchange("D"); if (!result.equals("OK")) throw new java.io.IOException("Detach: " + result); detached = true; }
+    public void detach() throws Exception { if (detached) return; for (long address : new ArrayList<>(breakpoints)) breakpoint(address, false); String result = exchange("D"); if (!result.equals("OK")) throw new java.io.IOException("Detach: " + result); detached = true; }
     @Override public void close() throws Exception {
         Exception failure = null;
         try { if (!detached && !running) detach(); } catch (Exception error) { failure = error; }
