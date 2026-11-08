@@ -26,8 +26,7 @@ public final class DebugService extends Service {
             if (id != null && id.equals(active)) {
                 try {
                     JSONObject command = new JSONObject(intent.hasExtra("values") ? intent.getStringExtra("values") : "{}").put("action", action);
-                    if (nativeDebugger != null && ("interrupt".equals(action) || "detach".equals(action))) nativeDebugger.interrupt();
-                    commands.offer(command);
+                    queue(command);
                 } catch (Exception error) { android.util.Log.e("WorkshopDebug", "Control failed", error); }
             } else if (active == null) stopSelf(startId);
             return START_NOT_STICKY;
@@ -42,6 +41,16 @@ public final class DebugService extends Service {
         return START_NOT_STICKY;
     }
 
+    private void queue(JSONObject command) {
+        String action = command.optString("action");
+        if (nativeDebugger != null && (action.equals("interrupt") || action.equals("detach"))) {
+            new Thread(() -> {
+                try { NativeDebugger debugger = nativeDebugger; if (debugger != null) debugger.interrupt(); }
+                catch (Exception error) { android.util.Log.e("WorkshopDebug", "Native interrupt failed", error); }
+                finally { commands.offer(command); }
+            }, "debugger-interrupt").start();
+        } else commands.offer(command);
+    }
     private void event(File dir, String phase, String message, JSONObject payload) throws Exception {
         JSONObject row = new JSONObject().put("recordedAt", System.currentTimeMillis()).put("phase", phase).put("message", message).put("payload", payload);
         try (java.io.FileWriter out = new java.io.FileWriter(new File(dir, "controller-events.jsonl"), true)) { out.write(row.toString() + "\n"); }
@@ -144,7 +153,7 @@ public final class DebugService extends Service {
         if (!request.optString("variableAddress").isEmpty()) { String bytes = debugger.memory(NativeDebugger.address(request.getString("variableAddress")), 4); snapshot.put("variable", new JSONObject().put("address", request.getString("variableAddress")).put("type", "volatile int32").put("bytesLittleEndian", bytes)); }
     }
     @Override public void onTimeout(int startId, int type) {
-        try { if (nativeDebugger != null) nativeDebugger.interrupt(); commands.offer(new JSONObject().put("action", "detach")); }
+        try { queue(new JSONObject().put("action", "detach")); }
         catch (Exception error) { android.util.Log.e("WorkshopDebug", "Timeout detach failed", error); }
     }
 }
