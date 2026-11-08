@@ -65,15 +65,24 @@ def main():
     (ROOT / 'evidence/pairing-runtime.json').write_text(json.dumps(result, indent=2) + '\n')
     if final.get('phase') == 'ready-to-provision' and '--provision' in sys.argv:
         launch('provision')
-        end = time.monotonic() + 95
+        end = time.monotonic() + 100
+        last = None
         while time.monotonic() < end:
             state = current()
-            if state.get('phase') in ['network-status', 'module-error', 'response-timeout']:
-                result['provisioning'] = state
-                (ROOT / 'evidence/pairing-runtime.json').write_text(json.dumps(result, indent=2) + '\n')
+            marker = (state.get('phase'), state.get('message'))
+            if marker != last:
+                print(json.dumps({'id': state['id'], 'phase': marker[0], 'message': marker[1]}), flush=True)
+                last = marker
+            result['provisioning'] = state
+            (ROOT / 'evidence/pairing-runtime.json').write_text(json.dumps(result, indent=2) + '\n')
+            if state.get('phase') in ['network-status', 'module-error', 'response-timeout', 'metadata-required', 'connection-error', 'completed']:
                 break
             time.sleep(.5)
-    print(json.dumps({'saved': 'evidence/pairing-runtime.json', 'phase': final.get('phase'), 'coolkitCompatible': final.get('coolkitCompatible'), 'deviceId': final.get('deviceId')}), flush=True)
+        else:
+            result['observerDeadlineReached'] = True
+            (ROOT / 'evidence/pairing-runtime.json').write_text(json.dumps(result, indent=2) + '\n')
+    latest = result.get('provisioning', final)
+    print(json.dumps({'saved': 'evidence/pairing-runtime.json', 'phase': latest.get('phase'), 'coolkitCompatible': final.get('coolkitCompatible'), 'deviceId': final.get('deviceId')}), flush=True)
 
 if __name__ == '__main__':
     main()

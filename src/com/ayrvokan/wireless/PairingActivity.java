@@ -18,6 +18,7 @@ public final class PairingActivity extends Activity {
     private TextView status;
     private final Handler handler = new Handler();
     private boolean resumed;
+    private boolean selectingMetadata;
     private final Runnable tick = new Runnable() { public void run() { if (!resumed) return; if (pairing != null) pairing.poll(); render(); handler.postDelayed(this, 750); } };
 
     @Override public void onCreate(Bundle state) {
@@ -31,6 +32,7 @@ public final class PairingActivity extends Activity {
         button(body, "Inspect Bluetooth services", () -> start(false, false));
         button(body, "Connect and read device information", () -> start(true, false));
         button(body, "Scan Wi-Fi networks on device", () -> active().request("scanWifiList", 0));
+        button(body, "Import device encryption metadata", () -> { active(); selectingMetadata = true; try { startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE), 32); } catch (Exception error) { selectingMetadata = false; throw error; } });
         button(body, "Connect device to Wi-Fi", () -> active().provision(ssid.getText().toString(), password.getText().toString()));
         button(body, "Read device network status", () -> active().request("checkIpNetwork"));
         button(body, "Disconnect", this::disconnect);
@@ -68,8 +70,23 @@ public final class PairingActivity extends Activity {
     private void render() { if (pairing != null && status != null) try { status.setText(pairing.state.toString(2)); } catch (Exception error) { status.setText(error.toString()); } }
     @Override public void onResume() { super.onResume(); resumed = true; handler.post(tick); }
     @Override public void onPause() { resumed = false; handler.removeCallbacks(tick); super.onPause(); }
-    @Override public void onStop() { disconnect(); super.onStop(); }
+    @Override public void onStop() { if (!selectingMetadata) disconnect(); super.onStop(); }
+    @Override public void onDestroy() { disconnect(); super.onDestroy(); }
     @Override public void onNewIntent(Intent intent) { super.onNewIntent(intent); setIntent(intent); handle(intent); }
+
+    @Override public void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request != 32) return;
+        selectingMetadata = false;
+        if (result != RESULT_OK || data == null) return;
+        run(() -> {
+            try (java.io.InputStream input = getContentResolver().openInputStream(data.getData()); java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream()) {
+                byte[] buffer = new byte[4096]; int count;
+                while ((count = input.read(buffer)) != -1) { if (output.size() + count > 65536) throw new IllegalArgumentException("Metadata file exceeds 64 KiB"); output.write(buffer, 0, count); }
+                active().importMetadata(new String(output.toByteArray(), java.nio.charset.StandardCharsets.UTF_8));
+            }
+        });
+    }
 
     private void handle(Intent intent) {
         String action = intent.getStringExtra("action");

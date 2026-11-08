@@ -29,6 +29,8 @@ def main():
         android = Path(os.environ['ANDROID_HOME']) / 'platforms/android-35/android.jar'
         with tempfile.TemporaryDirectory(prefix='workshop-preflight-') as destination:
             subprocess.run(['javac', '--release', '8', '-g', '-classpath', str(android), '-d', destination, *map(str, sorted((ROOT / 'src').rglob('*.java')))], check=True)
+            subprocess.run(['javac', '--release', '8', '-classpath', destination, '-d', destination, str(ROOT / 'tools/VerifyPairingCrypto.java')], check=True)
+            subprocess.run(['java', '-classpath', destination, 'VerifyPairingCrypto'], check=True)
         compiled = True
     print(json.dumps({'preflight': 'pass', 'components': len(components), 'androidCompilation': compiled}))
 

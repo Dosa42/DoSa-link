@@ -34,6 +34,11 @@ public final class PairingSession {
     private int mode = 6;
     private String pending = "";
     private long requestSequence;
+    private PairingCrypto crypto;
+    private String appUuid;
+    private String provisionSsid;
+    private String provisionPassword;
+    private boolean authenticated;
 
     public PairingSession(Context context, String address, Runnable refresh) throws Exception {
         this.context = context.getApplicationContext(); this.refresh = refresh;
@@ -52,7 +57,7 @@ public final class PairingSession {
     }
 
     public static JSONObject redacted(Object value) throws Exception {
-        JSONObject wrapper = new JSONObject().put("value", value); redact(wrapper); return wrapper;
+        JSONObject wrapper = new JSONObject(new JSONObject().put("value", value).toString()); redact(wrapper); return wrapper;
     }
 
     private static void redact(JSONObject value) throws Exception {
@@ -169,11 +174,20 @@ public final class PairingSession {
             if (method.startsWith("event:")) { update("module-event", method, redacted(json)); return; }
             if (!method.equals(pending)) return;
             pending = "";
-            state.getJSONObject("results").put(method, new JSONObject().put("success", success).put("value", redacted(json).get("value")));
-            update(success ? "response" : "module-error", method + (success ? " completed" : " rejected"), redacted(json));
-            if (!success) return;
+            Object recorded = method.equals("blueToothAuth") ? "[authentication response]" : json;
+            state.getJSONObject("results").put(method, new JSONObject().put("success", success).put("value", redacted(recorded).get("value")));
+            update(success ? "response" : "module-error", method + (success ? " completed" : " rejected"), redacted(recorded));
+            if (!success) { provisionPassword = null; return; }
             if (method.equals("connectBLEDevice")) request("getDeviceInfo");
-            else if (method.equals("getDeviceInfo")) {
+            else if (method.equals("blueToothAuth")) {
+                String deviceUuid = crypto.decrypt(String.valueOf(json));
+                if (deviceUuid.isEmpty()) throw new IllegalStateException("Device authentication returned an empty UUID");
+                request("blueToothConfirmAuth", crypto.encrypt(appUuid + "_" + deviceUuid));
+            } else if (method.equals("blueToothConfirmAuth")) {
+                if (!Boolean.TRUE.equals(json)) throw new IllegalStateException("Device rejected Bluetooth authentication");
+                authenticated = true; state.put("authenticated", true);
+                sendWifi();
+            } else if (method.equals("getDeviceInfo")) {
                 if (json instanceof JSONObject) {
                     File file = new File(context.getFilesDir(), "paired-devices.json"); JSONObject saved = file.isFile() ? new JSONObject(JadxJobs.read(file)) : new JSONObject();
                     JSONObject record = (JSONObject) json; record.put("address", state.getString("address")).put("module", "com.pair.bluetooth.coolkit.BLEPairModule").put("lastVerified", System.currentTimeMillis());
@@ -189,15 +203,42 @@ public final class PairingSession {
                 update("wifi-response", "Device returned Wi-Fi provisioning status", redacted(json));
                 request("checkIpNetwork");
             } else if (method.equals("checkIpNetwork")) update("network-status", "Device network status received", redacted(json));
-        } catch (Throwable error) { pending = ""; update("module-error", error.toString(), new JSONObject()); }
+        } catch (Throwable error) { pending = ""; provisionPassword = null; update("module-error", error.toString(), new JSONObject()); }
     }
 
     public void provision(String ssid, String password) throws Exception {
         if (ssid == null || ssid.isEmpty()) throw new IllegalArgumentException("Enter a Wi-Fi network name");
-        int auth = 3; JSONArray networks = state.optJSONArray("wifiNetworks");
-        if (networks != null) for (int i = 0; i < networks.length(); i++) if (ssid.equals(networks.getJSONObject(i).optString("ssid"))) auth = networks.getJSONObject(i).optInt("authMode", 3);
+        if (!pending.isEmpty()) throw new IllegalStateException("Waiting for " + pending);
+        File metadataFile = new File(context.getFilesDir(), "pairing-metadata.json");
+        String deviceId = state.optString("deviceId");
+        JSONObject metadata = metadataFile.isFile() ? new JSONObject(JadxJobs.read(metadataFile)).optJSONObject(deviceId) : null;
+        if (metadata == null) { update("metadata-required", "Device encryption metadata is required. Import metadata for " + deviceId + " to continue Wi-Fi provisioning.", new JSONObject()); return; }
+        crypto = new PairingCrypto(metadata.getString("secretKey"), metadata.optString("iv", "0000000000000000"));
+        provisionSsid = ssid; provisionPassword = password;
         state.put("wifiSsid", ssid);
-        request("connectWifiBySsid", ssid, password, auth);
+        if (authenticated) sendWifi();
+        else { appUuid = UUID.randomUUID().toString(); request("blueToothAuth", crypto.encrypt(appUuid)); }
+    }
+
+    private void sendWifi() throws Exception {
+        int connected = 0; JSONArray networks = state.optJSONArray("wifiNetworks");
+        if (networks != null) for (int i = 0; i < networks.length(); i++) if (provisionSsid.equals(networks.getJSONObject(i).optString("ssid"))) connected = networks.getJSONObject(i).optInt("connected", 0);
+        String encrypted = provisionPassword == null || provisionPassword.isEmpty() ? "" : crypto.encrypt(provisionPassword);
+        provisionPassword = null;
+        state.put("passwordEncrypted", true).put("wifiConnectedFlag", connected);
+        request("connectWifiBySsid", provisionSsid, encrypted, connected);
+    }
+
+    public void importMetadata(String text) throws Exception {
+        JSONObject imported = new JSONObject(text); String deviceId = state.optString("deviceId");
+        if (deviceId.isEmpty() || !deviceId.equals(imported.optString("deviceid"))) throw new IllegalArgumentException("Metadata deviceid must match the connected device");
+        new PairingCrypto(imported.getString("secretKey"), imported.optString("iv", "0000000000000000"));
+        File file = new File(context.getFilesDir(), "pairing-metadata.json");
+        JSONObject metadata = file.isFile() ? new JSONObject(JadxJobs.read(file)) : new JSONObject();
+        metadata.put(deviceId, new JSONObject().put("secretKey", imported.getString("secretKey")).put("iv", imported.optString("iv", "0000000000000000")));
+        JadxJobs.write(file, metadata);
+        authenticated = false;
+        update("metadata-imported", "Device encryption metadata imported for " + deviceId, new JSONObject());
     }
 
     private void provisionFromFile() throws Exception { JSONObject input = new JSONObject(JadxJobs.read(new File(context.getFilesDir(), "pairing-input.json"))); provision(input.getString("ssid"), input.getString("password")); }
@@ -205,6 +246,7 @@ public final class PairingSession {
 
     public void close() {
         if (closed) return;
+        provisionPassword = null; crypto = null; appUuid = null;
         closeGatt(); if (bridge != null) bridge.close();
         update("completed", "Pairing session disconnected", new JSONObject());
         closed = true;
