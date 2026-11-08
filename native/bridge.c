@@ -16,6 +16,7 @@ typedef struct {
     int option_count;
     char *result;
     char *error;
+    FILE *log;
 } WorkshopInvocation;
 
 static char *joined(const char *first, const char *second) {
@@ -26,6 +27,7 @@ static char *joined(const char *first, const char *second) {
 }
 
 static int load_library(WorkshopInvocation *call, const char *relative) {
+    if (call->log) { fprintf(call->log, "pid=%ld loading=%s\n", (long) getpid(), relative); fflush(call->log); }
     char *path = joined(call->home, relative);
     void *handle = path ? dlopen(path, RTLD_NOW | RTLD_GLOBAL) : NULL;
     if (!handle) {
@@ -53,7 +55,7 @@ static void *invoke_vm(void *argument) {
         call->error = strdup("Bundled libjvm does not export JNI_CreateJavaVM");
         return NULL;
     }
-    int base_count = 7;
+    int base_count = 8;
     JavaVMOption *options = calloc((size_t) (base_count + call->option_count), sizeof(JavaVMOption));
     if (!options) { call->error = strdup("Unable to allocate JVM option records"); return NULL; }
     options[0].optionString = joined("-Djava.home=", call->home);
@@ -66,13 +68,16 @@ static void *invoke_vm(void *argument) {
     options[5].optionString = joined("-Duser.home=", call->output);
     char *error_path = joined(call->output, "/hs_err_pid%p.log");
     options[6].optionString = joined("-XX:ErrorFile=", error_path);
+    options[7].optionString = strdup("-Dworkshop.jni=true");
     free(error_path);
     for (int index = 0; index < call->option_count; index++) options[base_count + index].optionString = call->options[index];
-    JavaVMInitArgs config = {.version = JNI_VERSION_1_8, .nOptions = base_count + call->option_count, .options = options, .ignoreUnrecognized = JNI_FALSE};
+    JavaVMInitArgs config = {.version = JNI_VERSION_1_6, .nOptions = base_count + call->option_count, .options = options, .ignoreUnrecognized = JNI_FALSE};
     JavaVM *vm = NULL;
     JNIEnv *env = NULL;
+    if (call->log) { fprintf(call->log, "pid=%ld creating=HotSpot\n", (long) getpid()); fflush(call->log); }
     jint status = create(&vm, (void **) &env, &config);
-    for (int index = 0; index < base_count; index++) free(options[index].optionString);
+    if (call->log) { fprintf(call->log, "pid=%ld create_status=%d\n", (long) getpid(), status); fflush(call->log); }
+    for (int index = 0; index < base_count; index++) free((void *) options[index].optionString);
     free(options);
     if (status != JNI_OK || !env) {
         char message[96];
@@ -106,6 +111,7 @@ static void *invoke_vm(void *argument) {
     }
     if (!call->result && !call->error) call->error = strdup("Bundled JVM returned no result");
     (*vm)->DestroyJavaVM(vm);
+    if (call->log) { fprintf(call->log, "pid=%ld vm_destroyed=true\n", (long) getpid()); fflush(call->log); }
     return NULL;
 }
 
@@ -124,6 +130,8 @@ JNIEXPORT jstring JNICALL Java_com_ayrvokan_wireless_NativeJadx_invoke(JNIEnv *e
     call.request = copy_string(env, request);
     call.output = copy_string(env, output);
     call.progress = copy_string(env, progress);
+    char *log_path = joined(call.output, "/native-jvm.log");
+    if (log_path) { call.log = fopen(log_path, "a"); free(log_path); }
     call.option_count = (*env)->GetArrayLength(env, vm_options);
     call.options = calloc((size_t) call.option_count + 1, sizeof(char *));
     for (int index = 0; index < call.option_count; index++) {
@@ -143,5 +151,6 @@ JNIEXPORT jstring JNICALL Java_com_ayrvokan_wireless_NativeJadx_invoke(JNIEnv *e
     free(call.home); free(call.classpath); free(call.request); free(call.output); free(call.progress);
     for (int index = 0; index < call.option_count; index++) free(call.options[index]);
     free(call.options); free(call.result); free(call.error);
+    if (call.log) fclose(call.log);
     return result;
 }

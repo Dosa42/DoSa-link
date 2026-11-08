@@ -107,11 +107,13 @@ public final class Runner {
             report.put("heapLimit", Runtime.getRuntime().maxMemory());
             report.put("workerPid", ProcessHandle.current().pid());
             report.put("javaVersion", System.getProperty("java.version"));
-            report.put("runtimeBackend", "jni-hotspot");
+            report.put("runtimeBackend", Boolean.getBoolean("workshop.jni") ? "jni-hotspot" : "host-jvm");
+            report.put("vmArguments", new JSONArray(java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments()));
             report.put("staging", "shared-analysis-context/ordered-dex-output");
             report.put("metadataLoadCount", 1);
             report.put("crossDexContextPreserved", true);
             File progress = new File(progressPath);
+            write(new File(output, "runtime-start.json"), report);
             write(progress, new JSONObject().put("phase", "Loading input").put("completed", 0).put("total", 0));
             try (JadxDecompiler jadx = new JadxDecompiler(args)) {
                 jadx.load();

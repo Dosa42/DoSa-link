@@ -68,13 +68,13 @@ public final class JadxJobs {
         if (file.exists() && !file.delete()) throw new java.io.IOException("Unable to remove unfinished file: " + file.getName());
     }
 
-    private static void retainLogs(File dir) throws Exception {
+    public static void retainLogs(File dir) throws Exception {
         File working = new File(dir, "working");
         File[] files = working.listFiles();
         if (files == null) return;
         for (File file : files) {
             String name = file.getName();
-            if (file.isFile() && (name.equals("console.log") || name.equals("jadx.log") || name.startsWith("hs_err_pid"))) {
+            if (file.isFile() && (name.equals("console.log") || name.equals("jadx.log") || name.equals("native-jvm.log") || name.equals("runtime-start.json") || name.startsWith("hs_err_pid"))) {
                 java.nio.file.Files.copy(file.toPath(), new File(dir, name).toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
         }

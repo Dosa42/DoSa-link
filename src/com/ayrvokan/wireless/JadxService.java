@@ -96,12 +96,8 @@ public final class JadxService extends Service {
             } catch (Throwable error) {
                 Throwable cause = error instanceof java.lang.reflect.InvocationTargetException ? error.getCause() : error;
                 String detail = cause.toString();
-                for (String log : new String[] {"jadx.log", "console.log"}) {
-                    if (new File(working, log).isFile()) {
-                        try { java.nio.file.Files.copy(new File(working, log).toPath(), new File(dir, log).toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING); }
-                        catch (Exception copyError) { detail += "\nLog retention failed: " + copyError; }
-                    }
-                }
+                try { JadxJobs.retainLogs(dir); }
+                catch (Exception copyError) { detail += "\nLog retention failed: " + copyError; }
                 JadxJobs.remove(working);
                 JadxJobs.remove(new File(dir, "input"));
                 JadxJobs.write(new File(dir, "failure.json"), new JSONObject().put("error", detail).put("stack", android.util.Log.getStackTraceString(cause)));
